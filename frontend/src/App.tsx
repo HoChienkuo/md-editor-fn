@@ -5,6 +5,14 @@ import {
 } from 'react';
 
 import {
+    useFileContext
+} from './hooks/use-file-context';
+
+import {
+    authorizeKnownFile
+} from './services/fnos-sdk';
+
+import {
     readLaunchContext,
     type LaunchContext
 } from './services/launch-context';
@@ -134,8 +142,7 @@ function InvalidPathView({
 }
 
 function FileLaunchView({
-                            context,
-                            healthState
+                            context
                         }: {
     context: Extract<
         LaunchContext,
@@ -143,55 +150,159 @@ function FileLaunchView({
             type: 'file';
         }
     >;
-    healthState: HealthState;
 }) {
+    const {
+        state,
+        refresh
+    } = useFileContext(context.path);
+
+    const [
+        authorizationMessage,
+        setAuthorizationMessage
+    ] = useState('');
+
+    const [
+        authorizing,
+        setAuthorizing
+    ] = useState(false);
+
+    async function authorize(): Promise<void> {
+        setAuthorizing(true);
+        setAuthorizationMessage('');
+
+        try {
+            await authorizeKnownFile(
+                context.path
+            );
+
+            setAuthorizationMessage(
+                '授权完成，正在重新检查权限……'
+            );
+
+            await refresh();
+        } catch (error) {
+            setAuthorizationMessage(
+                error instanceof Error
+                    ? error.message
+                    : String(error)
+            );
+        } finally {
+            setAuthorizing(false);
+        }
+    }
+
     return (
         <>
             <h1>{context.fileName}</h1>
 
-            <p className="status-success">
-                已收到 fnOS 文件打开请求
-            </p>
+            {state.status === 'loading' && (
+                <p>正在检查文件授权和权限……</p>
+            )}
 
-            <dl className="launch-details">
-                <div>
-                    <dt>文件名</dt>
-                    <dd>{context.fileName}</dd>
-                </div>
+            {state.status === 'error' && (
+                <>
+                    <p className="status-error">
+                        无法检查文件权限
+                    </p>
 
-                <div>
-                    <dt>扩展名</dt>
-                    <dd>.{context.extension}</dd>
-                </div>
+                    <p className="secondary">
+                        {state.message}
+                    </p>
 
-                <div>
-                    <dt>文件路径</dt>
-                    <dd>{context.path}</dd>
-                </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            void refresh();
+                        }}
+                    >
+                        重试
+                    </button>
+                </>
+            )}
 
-                <div>
-                    <dt>后端服务</dt>
+            {state.status === 'success' && (
+                <>
+                    <dl className="launch-details">
+                        <div>
+                            <dt>文件名</dt>
+                            <dd>{context.fileName}</dd>
+                        </div>
 
-                    <dd>
-                        {healthState.status === 'loading' && (
-                            '正在检查……'
+                        <div>
+                            <dt>位置</dt>
+                            <dd>
+                                {state.context.semanticPath ||
+                                    context.fileName}
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt>读取权限</dt>
+                            <dd>
+                                {state.context.permissions.readable
+                                    ? '允许'
+                                    : '不允许'}
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt>写入权限</dt>
+                            <dd>
+                                {state.context.permissions.writable
+                                    ? '允许'
+                                    : '不允许'}
+                            </dd>
+                        </div>
+
+                        <div>
+                            <dt>删除权限</dt>
+                            <dd>
+                                {state.context.permissions.deletable
+                                    ? '允许'
+                                    : '不允许'}
+                            </dd>
+                        </div>
+                    </dl>
+
+                    {state.context.authorizationRequired && (
+                        <div className="authorization-panel">
+                            <p>
+                                Markdown 编辑器需要获得此文件的访问授权。
+                            </p>
+
+                            <button
+                                type="button"
+                                disabled={authorizing}
+                                onClick={() => {
+                                    void authorize();
+                                }}
+                            >
+                                {authorizing
+                                    ? '正在授权……'
+                                    : '授权此文件'}
+                            </button>
+                        </div>
+                    )}
+
+                    {!state.context.authorizationRequired &&
+                        state.context.permissions.readable && (
+                            <p className="status-success">
+                                文件授权与读取权限检查通过
+                            </p>
                         )}
 
-                        {healthState.status === 'success' && (
-                            `运行正常，Node.js ${healthState.health.node}`
-                        )}
+                    {authorizationMessage && (
+                        <p className="secondary">
+                            {authorizationMessage}
+                        </p>
+                    )}
 
-                        {healthState.status === 'error' && (
-                            `连接失败：${healthState.message}`
-                        )}
-                    </dd>
-                </div>
-            </dl>
-
-            <p className="secondary">
-                当前阶段只验证文件入口和 path 参数，
-                暂时不会读取或修改这个文件。
-            </p>
+                    <p className="secondary">
+                        当前阶段只检查授权和权限，
+                        暂时不会读取或修改文件内容。
+                    </p>
+                </>
+            )}
         </>
     );
 }
@@ -201,9 +312,7 @@ export function App() {
         () => readLaunchContext(),
         []
     );
-
-    const healthState = useHealthCheck();
-
+    useHealthCheck();
     useEffect(() => {
         if (launchContext.type === 'file') {
             document.title =
@@ -219,7 +328,7 @@ export function App() {
         <main className="app-shell">
             <section className="status-card">
                 {launchContext.type === 'missing-path' && (
-                    <MissingPathView />
+                    <MissingPathView/>
                 )}
 
                 {launchContext.type === 'invalid-path' && (
@@ -231,7 +340,6 @@ export function App() {
                 {launchContext.type === 'file' && (
                     <FileLaunchView
                         context={launchContext}
-                        healthState={healthState}
                     />
                 )}
             </section>

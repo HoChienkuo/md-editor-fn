@@ -1,3 +1,6 @@
+import {
+    fileContextRouter
+} from './routes/file-context.js';
 import express from 'express';
 import type {
     NextFunction,
@@ -53,6 +56,11 @@ export function createApplication() {
                     uptimeSeconds: Math.floor(process.uptime())
                 });
         }
+    );
+
+    router.use(
+        '/api/fnos',
+        fileContextRouter
     );
 
     /*
