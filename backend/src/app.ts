@@ -34,7 +34,7 @@ export function createApplication() {
 
     app.use(
         express.json({
-            limit: '1mb'
+            limit: '25mb'
         })
     );
 

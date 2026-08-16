@@ -16,6 +16,10 @@ import {
 } from '../documents/open-document.js';
 
 import {
+    saveMarkdownDocument
+} from '../documents/save-document.js';
+
+import {
     DocumentError
 } from '../documents/error.js';
 
@@ -41,6 +45,33 @@ const openRequestSchema = z.object({
             /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
         )
         .default('zh-CN')
+});
+
+const documentVersionSchema = z.object({
+    mtimeMs: z
+        .number()
+        .finite()
+        .nonnegative(),
+
+    size: z
+        .number()
+        .int()
+        .nonnegative(),
+
+    hash: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+});
+
+const saveRequestSchema = z.object({
+    documentId: z
+        .string()
+        .uuid(),
+
+    content: z
+        .string(),
+
+    version: documentVersionSchema
 });
 
 export const documentsRouter =
@@ -147,6 +178,120 @@ documentsRouter.post(
                 .send({
                     error: 'INTERNAL_SERVER_ERROR',
                     message: '无法打开 Markdown 文件'
+                });
+        }
+    }
+);
+
+documentsRouter.post(
+    '/save',
+    async (
+        request,
+        response
+    ) => {
+        const parsed =
+            saveRequestSchema.safeParse(
+                request.body
+            );
+
+        if (!parsed.success) {
+            response
+                .status(400)
+                .send({
+                    error: 'INVALID_REQUEST',
+                    message: '保存文件请求无效'
+                });
+
+            return;
+        }
+
+        try {
+            const currentUser =
+                getCurrentUser(request);
+
+            const savedDocument =
+                await saveMarkdownDocument({
+                    uid: currentUser.uid,
+                    documentId:
+                    parsed.data.documentId,
+                    content:
+                    parsed.data.content,
+                    version:
+                    parsed.data.version
+                });
+
+            response
+                .status(200)
+                .send(savedDocument);
+        } catch (error) {
+            if (
+                error instanceof CurrentUserError
+            ) {
+                response
+                    .status(401)
+                    .send({
+                        error:
+                            'USER_CONTEXT_MISSING',
+                        message: error.message
+                    });
+
+                return;
+            }
+
+            if (
+                error instanceof DocumentError
+            ) {
+                response
+                    .status(error.status)
+                    .send({
+                        error: error.code,
+                        message: error.message
+                    });
+
+                return;
+            }
+
+            if (
+                error instanceof FnosApiError
+            ) {
+                logger.error(
+                    'fnOS API failed while saving document',
+                    {
+                        code: error.code,
+                        requestId:
+                        error.requestId,
+                        message: error.message
+                    }
+                );
+
+                response
+                    .status(502)
+                    .send({
+                        error: 'FNOS_API_ERROR',
+                        message: error.message,
+                        code: error.code
+                    });
+
+                return;
+            }
+
+            logger.error(
+                'Unexpected document save failure',
+                {
+                    message:
+                        error instanceof Error
+                            ? error.message
+                            : String(error)
+                }
+            );
+
+            response
+                .status(500)
+                .send({
+                    error:
+                        'INTERNAL_SERVER_ERROR',
+                    message:
+                        '无法保存 Markdown 文件'
                 });
         }
     }

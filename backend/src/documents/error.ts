@@ -5,9 +5,12 @@ export type DocumentErrorCode =
     | 'NOT_A_FILE'
     | 'FILE_TOO_LARGE'
     | 'FILE_NOT_READABLE'
+    | 'FILE_NOT_WRITABLE'
     | 'FILE_ACCESS_DENIED'
     | 'UNSUPPORTED_ENCODING'
-    | 'DOCUMENT_SESSION_NOT_FOUND';
+    | 'DOCUMENT_SESSION_NOT_FOUND'
+    | 'DOCUMENT_CONFLICT'
+    | 'SAVE_FAILED';
 
 export class DocumentError extends Error {
     readonly code: DocumentErrorCode;

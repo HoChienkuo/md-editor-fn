@@ -21,3 +21,13 @@ export function createDocumentVersion(
         hash
     };
 }
+
+export function isSameDocumentVersion(
+    left: DocumentVersion,
+    right: DocumentVersion
+): boolean {
+    return (
+        left.size === right.size &&
+        left.hash === right.hash
+    );
+}

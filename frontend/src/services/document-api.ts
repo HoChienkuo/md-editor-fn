@@ -44,3 +44,26 @@ export async function openDocument(
         )
         .send();
 }
+
+export type SavedDocument = {
+    documentId: string;
+    version: DocumentVersion;
+    savedAt: string;
+};
+
+export async function saveDocument(
+    documentId: string,
+    content: string,
+    version: DocumentVersion
+): Promise<SavedDocument> {
+    return await apiClient
+        .Post<SavedDocument>(
+            '/app/md-editor-fn/api/documents/save',
+            {
+                documentId,
+                content,
+                version
+            }
+        )
+        .send();
+}

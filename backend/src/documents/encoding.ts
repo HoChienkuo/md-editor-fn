@@ -100,3 +100,64 @@ export function decodeMarkdown(
         );
     }
 }
+
+function normalizeLineEndings(
+    content: string,
+    lineEnding: DocumentLineEnding
+): string {
+    if (lineEnding === 'mixed') {
+        /*
+         * 混合换行符无法在编辑后准确恢复每一行原来的格式，
+         * 因此保留编辑器当前提供的内容。
+         */
+        return content;
+    }
+
+    if (lineEnding === 'none') {
+        /*
+         * 原文件没有换行符，但用户编辑后可能主动添加换行，
+         * 因此不删除用户新增的换行。
+         */
+        return content;
+    }
+
+    const normalized = content.replace(
+        /\r\n|\r|\n/g,
+        '\n'
+    );
+
+    if (lineEnding === 'crlf') {
+        return normalized.replace(
+            /\n/g,
+            '\r\n'
+        );
+    }
+
+    return normalized;
+}
+
+export function encodeMarkdown(
+    content: string,
+    encoding: DocumentEncoding,
+    lineEnding: DocumentLineEnding
+): Buffer {
+    const normalizedContent =
+        normalizeLineEndings(
+            content,
+            lineEnding
+        );
+
+    const contentBuffer = Buffer.from(
+        normalizedContent,
+        'utf8'
+    );
+
+    if (!encoding.bom) {
+        return contentBuffer;
+    }
+
+    return Buffer.concat([
+        utf8Bom,
+        contentBuffer
+    ]);
+}

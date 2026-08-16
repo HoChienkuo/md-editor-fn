@@ -1,6 +1,8 @@
 import {
+    useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState
 } from 'react';
 import DOMPurify from 'dompurify';
@@ -8,9 +10,18 @@ import {
     MdEditor
 } from 'md-editor-rt';
 
+import {
+    saveDocument
+} from '../services/document-api';
+
 import type {
+    DocumentVersion,
     OpenedDocument
 } from '../services/document-api';
+
+import {
+    ApiRequestError
+} from '../services/api-client';
 import {
     useColorTheme
 } from '../hooks/use-color-theme';
@@ -67,10 +78,30 @@ export function MarkdownDocumentEditor({
         openedDocument.content
     );
 
-    // 阶段七保存成功后，需要更新这个基准内容。
-    const [savedContent] = useState(
+    const [
+        savedContent,
+        setSavedContent
+    ] = useState(
         openedDocument.content
     );
+
+    const [
+        currentVersion,
+        setCurrentVersion
+    ] = useState<DocumentVersion>(
+        openedDocument.version
+    );
+
+    const [isSaving, setIsSaving] = useState(false);
+
+    const [hasConflict, setHasConflict] =
+        useState(false);
+
+    const contentRef = useRef(content);
+
+    useEffect(() => {
+        contentRef.current = content;
+    }, [content]);
 
     const [saveMessage, setSaveMessage] = useState('');
 
@@ -102,34 +133,135 @@ export function MarkdownDocumentEditor({
 
     const handleChange = (nextContent: string) => {
         setContent(nextContent);
-        setSaveMessage('');
+
+        if (!hasConflict) {
+            setSaveMessage('');
+        }
     };
 
+    const saveCurrentContent = useCallback(
+        async (
+            contentToSave: string,
+            mode: 'manual' | 'auto'
+        ) => {
+            if (isReadOnly || isSaving || hasConflict) {
+                return;
+            }
+
+            if (contentToSave === savedContent) {
+                if (mode === 'manual') {
+                    setSaveMessage(
+                        '当前没有需要保存的修改'
+                    );
+                }
+
+                return;
+            }
+
+            setIsSaving(true);
+
+            if (mode === 'manual') {
+                setSaveMessage('正在保存……');
+            }
+
+            try {
+                const result = await saveDocument(
+                    openedDocument.documentId,
+                    contentToSave,
+                    currentVersion
+                );
+
+                /*
+                 * 保存请求发出后，用户可能继续输入。
+                 * 这里只把实际发送给后端的内容设为保存基准，
+                 * 不会错误地把后来输入的内容标记为已保存。
+                 */
+                setSavedContent(contentToSave);
+                setCurrentVersion(result.version);
+
+                setSaveMessage(
+                    mode === 'auto'
+                        ? '已自动保存'
+                        : '保存成功'
+                );
+            } catch (error) {
+                if (
+                    error instanceof ApiRequestError &&
+                    error.errorType ===
+                    'DOCUMENT_CONFLICT'
+                ) {
+                    setHasConflict(true);
+                    setSaveMessage(
+                        '磁盘文件已被其他用户或程序修改。为避免覆盖，自动保存已经暂停，请先复制当前内容并重新打开文件。'
+                    );
+
+                    return;
+                }
+
+                setSaveMessage(
+                    error instanceof Error
+                        ? `保存失败：${error.message}`
+                        : '保存失败，请稍后重试'
+                );
+            } finally {
+                setIsSaving(false);
+            }
+        },
+        [
+            currentVersion,
+            hasConflict,
+            isReadOnly,
+            isSaving,
+            openedDocument.documentId,
+            savedContent
+        ]
+    );
+
     const handleSave = (currentContent: string) => {
-        if (isReadOnly) {
-            setSaveMessage(
-                '当前文件为只读文件，不能保存'
-            );
-            return;
-        }
-
-        if (currentContent === savedContent) {
-            setSaveMessage(
-                '当前没有需要保存的修改'
-            );
-            return;
-        }
-
-        setSaveMessage(
-            '保存接口将在下一阶段接入，当前修改尚未写入磁盘'
+        void saveCurrentContent(
+            currentContent,
+            'manual'
         );
     };
 
+    useEffect(() => {
+        if (
+            isReadOnly ||
+            isSaving ||
+            hasConflict ||
+            !hasUnsavedChanges
+        ) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            void saveCurrentContent(
+                contentRef.current,
+                'auto'
+            );
+        }, 60 * 1000);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [
+        content,
+        hasConflict,
+        hasUnsavedChanges,
+        isReadOnly,
+        isSaving,
+        saveCurrentContent
+    ]);
+
     const documentStatus = isReadOnly
         ? '只读'
-        : hasUnsavedChanges
-            ? '未保存'
-            : '已保存';
+        : hasConflict
+            ? '保存冲突'
+            : isSaving
+                ? '保存中'
+                : hasUnsavedChanges
+                    ? '未保存'
+                    : '已保存';
 
     const encodingLabel = [
         openedDocument.encoding.name.toUpperCase(),

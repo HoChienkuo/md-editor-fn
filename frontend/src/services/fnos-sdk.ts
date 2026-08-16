@@ -39,3 +39,32 @@ export async function authorizeKnownFile(
 
     return result.data ?? [];
 }
+
+export async function setFnosExitPageTips(
+    hasUnsavedChanges: boolean
+): Promise<void> {
+    await sdk.ready();
+
+    /*
+     * 普通浏览器独立打开时使用 beforeunload，
+     * 不调用 fnOS iframe 宿主接口。
+     */
+    if (sdk.isStandaloneWeb) {
+        return;
+    }
+
+    if (hasUnsavedChanges) {
+        await sdk.setExitPageTips({
+            title: '内容尚未保存',
+            content:
+                '当前 Markdown 文件还有尚未保存的修改，确定要退出吗？'
+        });
+
+        return;
+    }
+
+    /*
+     * 不传参数表示清除退出提示。
+     */
+    await sdk.setExitPageTips();
+}
