@@ -178,20 +178,25 @@ assetsRouter.get(
         request,
         response
     ) => {
-        try {
-            const currentUser =
-                getCurrentUser(request);
+        const assetName =
+            request.params.assetName;
 
-            const assetName =
-                request.params.assetName;
-
-            if (!assetName) {
-                throw new AssetError(
+        if (!assetName) {
+            sendAssetError(
+                response,
+                new AssetError(
                     'ASSET_NOT_FOUND',
                     '图片不存在',
                     404
-                );
-            }
+                )
+            );
+
+            return;
+        }
+
+        try {
+            const currentUser =
+                getCurrentUser(request);
 
             const asset =
                 await loadPrivateAsset(

@@ -106,6 +106,16 @@ function mapSaveFileSystemError(
     throw error;
 }
 
+async function runSaveFileSystemOperation<T>(
+    operation: () => Promise<T>
+): Promise<T> {
+    try {
+        return await operation();
+    } catch (error) {
+        return mapSaveFileSystemError(error);
+    }
+}
+
 async function syncParentDirectory(
     filePath: string
 ): Promise<void> {
@@ -207,14 +217,12 @@ export async function saveMarkdownDocument(
              * ACL 查询对不存在的文件也可能返回 writable=false，
              * 所以先明确检查文件是否仍然存在。
              */
-            try {
-                await access(
+            await runSaveFileSystemOperation(
+                () => access(
                     session.realPath,
                     fsConstants.F_OK
-                );
-            } catch (error) {
-                mapSaveFileSystemError(error);
-            }
+                )
+            );
 
             /*
              * 不能只相信打开文件时记录的权限，
@@ -255,13 +263,18 @@ export async function saveMarkdownDocument(
                 undefined;
 
             try {
-                sourceHandle = await open(
-                    session.realPath,
-                    fsConstants.O_RDONLY
-                );
+                sourceHandle =
+                    await runSaveFileSystemOperation(
+                        () => open(
+                            session.realPath,
+                            fsConstants.O_RDONLY
+                        )
+                    );
 
                 const sourceStats =
-                    await sourceHandle.stat();
+                    await runSaveFileSystemOperation(
+                        () => sourceHandle!.stat()
+                    );
 
                 if (!sourceStats.isFile()) {
                     throw new DocumentError(
@@ -272,10 +285,14 @@ export async function saveMarkdownDocument(
                 }
 
                 const sourceBuffer =
-                    await sourceHandle.readFile();
+                    await runSaveFileSystemOperation(
+                        () => sourceHandle!.readFile()
+                    );
 
                 const finalSourceStats =
-                    await sourceHandle.stat();
+                    await runSaveFileSystemOperation(
+                        () => sourceHandle!.stat()
+                    );
 
                 const diskVersion =
                     createDocumentVersion(
@@ -322,26 +339,35 @@ export async function saveMarkdownDocument(
                 await sourceHandle.close();
                 sourceHandle = undefined;
 
-                await replaceFileContent(
-                    session.realPath,
-                    outputBuffer,
-                    sourceStats.mode
+                await runSaveFileSystemOperation(
+                    () => replaceFileContent(
+                        session.realPath,
+                        outputBuffer,
+                        sourceStats.mode
+                    )
                 );
 
                 /*
                  * 重新打开保存后的文件，获得最终文件状态。
                  */
-                const savedHandle = await open(
-                    session.realPath,
-                    fsConstants.O_RDONLY
-                );
+                const savedHandle =
+                    await runSaveFileSystemOperation(
+                        () => open(
+                            session.realPath,
+                            fsConstants.O_RDONLY
+                        )
+                    );
 
                 try {
                     const savedBuffer =
-                        await savedHandle.readFile();
+                        await runSaveFileSystemOperation(
+                            () => savedHandle.readFile()
+                        );
 
                     const savedStats =
-                        await savedHandle.stat();
+                        await runSaveFileSystemOperation(
+                            () => savedHandle.stat()
+                        );
 
                     const newVersion =
                         createDocumentVersion(
@@ -367,12 +393,6 @@ export async function saveMarkdownDocument(
                 } finally {
                     await savedHandle.close();
                 }
-            } catch (error) {
-                if (error instanceof DocumentError) {
-                    throw error;
-                }
-
-                return mapSaveFileSystemError(error);
             } finally {
                 await sourceHandle?.close();
             }

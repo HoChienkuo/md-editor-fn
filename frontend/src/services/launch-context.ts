@@ -28,7 +28,9 @@ function getFileName(filePath: string): string {
         .split('/')
         .filter(Boolean);
 
-    return segments.at(-1) ?? '';
+    return segments[
+        segments.length - 1
+    ] ?? '';
 }
 
 function getExtension(fileName: string): string {

@@ -45,7 +45,6 @@ export function useUnsavedChanges(
             event: BeforeUnloadEvent
         ) => {
             event.preventDefault();
-            event.returnValue = '';
         };
 
         window.addEventListener(

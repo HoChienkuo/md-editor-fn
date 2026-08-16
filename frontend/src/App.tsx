@@ -16,90 +16,12 @@ import {
     readLaunchContext,
     type LaunchContext
 } from './services/launch-context';
-import {useOpenDocument} from "./hooks/use-open-document";
-import {MarkdownDocumentEditor} from "./components/MarkdownDocumentEditor";
-
-type HealthResponse = {
-    status: string;
-    app: string;
-    version: string;
-    node: string;
-    uptimeSeconds: number;
-};
-
-type HealthState =
-    | {
-    status: 'loading';
-}
-    | {
-    status: 'success';
-    health: HealthResponse;
-}
-    | {
-    status: 'error';
-    message: string;
-};
-
-function useHealthCheck(): HealthState {
-    const [state, setState] = useState<HealthState>({
-        status: 'loading'
-    });
-
-    useEffect(() => {
-        const abortController = new AbortController();
-
-        async function loadHealth(): Promise<void> {
-            try {
-                const response = await fetch(
-                    './api/health',
-                    {
-                        headers: {
-                            Accept: 'application/json'
-                        },
-                        signal: abortController.signal
-                    }
-                );
-
-                if (!response.ok) {
-                    throw new Error(
-                        `HTTP ${response.status}`
-                    );
-                }
-
-                const health =
-                    await response.json() as HealthResponse;
-
-                setState({
-                    status: 'success',
-                    health
-                });
-            } catch (error) {
-                if (
-                    error instanceof DOMException &&
-                    error.name === 'AbortError'
-                ) {
-                    return;
-                }
-
-                setState({
-                    status: 'error',
-                    message:
-                        error instanceof Error
-                            ? error.message
-                            : String(error)
-                });
-            }
-        }
-
-        void loadHealth();
-
-        return () => {
-            abortController.abort();
-        };
-    }, []);
-
-    return state;
-}
+import {
+    useOpenDocument
+} from './hooks/use-open-document';
+import {
+    MarkdownDocumentEditor
+} from './components/MarkdownDocumentEditor';
 
 function MissingPathView() {
     return (
@@ -203,150 +125,125 @@ function FileLaunchView({
         }
     }
 
+    if (state.status === 'loading') {
+        return (
+            <>
+                <h1>{context.fileName}</h1>
+                <p>正在检查文件权限……</p>
+            </>
+        );
+    }
+
+    if (state.status === 'error') {
+        return (
+            <>
+                <h1>无法打开文件</h1>
+
+                <p className="status-error">
+                    无法检查文件权限
+                </p>
+
+                <p className="secondary">
+                    {state.message}
+                </p>
+
+                <button
+                    type="button"
+                    onClick={() => {
+                        void refresh();
+                    }}
+                >
+                    重试
+                </button>
+            </>
+        );
+    }
+
+    if (state.context.authorizationRequired) {
+        return (
+            <>
+                <h1>{context.fileName}</h1>
+
+                <dl className="launch-details">
+                    <div>
+                        <dt>文件名</dt>
+                        <dd>{context.fileName}</dd>
+                    </div>
+
+                    <div>
+                        <dt>位置</dt>
+                        <dd>
+                            {state.context.semanticPath ||
+                                context.fileName}
+                        </dd>
+                    </div>
+                </dl>
+
+                <div className="authorization-panel">
+                    <p>
+                        Markdown 编辑器需要获得此文件的访问授权。
+                    </p>
+
+                    <button
+                        type="button"
+                        disabled={authorizing}
+                        onClick={() => {
+                            void authorize();
+                        }}
+                    >
+                        {authorizing
+                            ? '正在授权……'
+                            : '授权此文件'}
+                    </button>
+                </div>
+
+                {authorizationMessage && (
+                    <p className="secondary">
+                        {authorizationMessage}
+                    </p>
+                )}
+            </>
+        );
+    }
+
+    if (documentState.state.status === 'error') {
+        return (
+            <>
+                <h1>无法打开文件</h1>
+
+                <p className="status-error">
+                    无法读取 Markdown 文件
+                </p>
+
+                <p className="secondary">
+                    {documentState.state.message}
+                </p>
+
+                <button
+                    type="button"
+                    onClick={() => {
+                        void documentState.reload();
+                    }}
+                >
+                    重新读取
+                </button>
+            </>
+        );
+    }
+
+    if (documentState.state.status === 'success') {
+        return (
+            <MarkdownDocumentEditor
+                key={documentState.state.document.documentId}
+                openedDocument={documentState.state.document}
+            />
+        );
+    }
+
     return (
         <>
             <h1>{context.fileName}</h1>
-
-            {state.status === 'loading' && (
-                <p>正在检查文件授权和权限……</p>
-            )}
-
-            {state.status === 'error' && (
-                <>
-                    <p className="status-error">
-                        无法检查文件权限
-                    </p>
-
-                    <p className="secondary">
-                        {state.message}
-                    </p>
-
-                    <button
-                        type="button"
-                        onClick={() => {
-                            void refresh();
-                        }}
-                    >
-                        重试
-                    </button>
-                </>
-            )}
-
-            {state.status === 'success' && (
-                <>
-                    <dl className="launch-details">
-                        <div>
-                            <dt>文件名</dt>
-                            <dd>{context.fileName}</dd>
-                        </div>
-
-                        <div>
-                            <dt>位置</dt>
-                            <dd>
-                                {state.context.semanticPath ||
-                                    context.fileName}
-                            </dd>
-                        </div>
-
-                        <div>
-                            <dt>读取权限</dt>
-                            <dd>
-                                {state.context.permissions.readable
-                                    ? '允许'
-                                    : '不允许'}
-                            </dd>
-                        </div>
-
-                        <div>
-                            <dt>写入权限</dt>
-                            <dd>
-                                {state.context.permissions.writable
-                                    ? '允许'
-                                    : '不允许'}
-                            </dd>
-                        </div>
-
-                        <div>
-                            <dt>删除权限</dt>
-                            <dd>
-                                {state.context.permissions.deletable
-                                    ? '允许'
-                                    : '不允许'}
-                            </dd>
-                        </div>
-                    </dl>
-
-                    {state.context.authorizationRequired && (
-                        <div className="authorization-panel">
-                            <p>
-                                Markdown 编辑器需要获得此文件的访问授权。
-                            </p>
-
-                            <button
-                                type="button"
-                                disabled={authorizing}
-                                onClick={() => {
-                                    void authorize();
-                                }}
-                            >
-                                {authorizing
-                                    ? '正在授权……'
-                                    : '授权此文件'}
-                            </button>
-                        </div>
-                    )}
-
-                    {!state.context.authorizationRequired &&
-                        state.context.permissions.readable && (
-                            <p className="status-success">
-                                文件授权与读取权限检查通过
-                            </p>
-                        )}
-
-                    {authorizationMessage && (
-                        <p className="secondary">
-                            {authorizationMessage}
-                        </p>
-                    )}
-
-                    <p className="secondary">
-                        当前阶段只检查授权和权限，
-                        暂时不会读取或修改文件内容。
-                    </p>
-                </>
-            )}
-
-            {documentState.state.status === 'loading' && (
-                <p>正在读取 Markdown 文件……</p>
-            )}
-
-            {documentState.state.status === 'error' && (
-                <div className="document-error">
-                    <p className="status-error">
-                        无法打开 Markdown 文件
-                    </p>
-
-                    <p className="secondary">
-                        {documentState.state.message}
-                    </p>
-
-                    <button
-                        type="button"
-                        onClick={() => {
-                            void documentState.reload();
-                        }}
-                    >
-                        重新读取
-                    </button>
-                </div>
-            )}
-
-            {documentState.state.status === 'success' && (
-                <MarkdownDocumentEditor
-                    key={documentState.state.document.documentId}
-                    openedDocument={documentState.state.document}
-                />
-            )}
+            <p>正在读取 Markdown 文件……</p>
         </>
     );
 }
@@ -356,7 +253,6 @@ export function App() {
         () => readLaunchContext(),
         []
     );
-    useHealthCheck();
     useEffect(() => {
         if (launchContext.type === 'file') {
             document.title =

@@ -105,13 +105,17 @@ export async function callFnosApi<
                                     response.statusCode < 200 ||
                                     response.statusCode >= 300
                                 ) {
-                                    throw new FnosApiError(
-                                        `fnOS API HTTP 错误：${
-                                            response.statusCode ?? 0
-                                        }`,
-                                        response.statusCode ?? -1,
-                                        requestId
+                                    reject(
+                                        new FnosApiError(
+                                            `fnOS API HTTP 错误：${
+                                                response.statusCode ?? 0
+                                            }`,
+                                            response.statusCode ?? -1,
+                                            requestId
+                                        )
                                     );
+
+                                    return;
                                 }
 
                                 const result = JSON.parse(
@@ -119,12 +123,16 @@ export async function callFnosApi<
                                 ) as FnosApiResponse<TResponse>;
 
                                 if (result.code !== 0) {
-                                    throw new FnosApiError(
-                                        result.msg ||
-                                        'fnOS API 调用失败',
-                                        result.code,
-                                        result.reqId || requestId
+                                    reject(
+                                        new FnosApiError(
+                                            result.msg ||
+                                            'fnOS API 调用失败',
+                                            result.code,
+                                            result.reqId || requestId
+                                        )
                                     );
+
+                                    return;
                                 }
 
                                 resolve(result.data);

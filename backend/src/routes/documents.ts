@@ -50,7 +50,6 @@ const openRequestSchema = z.object({
 const documentVersionSchema = z.object({
     mtimeMs: z
         .number()
-        .finite()
         .nonnegative(),
 
     size: z
@@ -64,9 +63,7 @@ const documentVersionSchema = z.object({
 });
 
 const saveRequestSchema = z.object({
-    documentId: z
-        .string()
-        .uuid(),
+    documentId: z.uuid(),
 
     content: z
         .string(),

@@ -97,6 +97,16 @@ function mapFileSystemError(
     throw error;
 }
 
+async function runFileSystemOperation<T>(
+    operation: () => Promise<T>
+): Promise<T> {
+    try {
+        return await operation();
+    } catch (error) {
+        return mapFileSystemError(error);
+    }
+}
+
 export async function openMarkdownDocument(
     uid: number,
     requestedPath: string,
@@ -116,13 +126,10 @@ export async function openMarkdownDocument(
 
     let resolvedPath: string;
 
-    try {
-        resolvedPath = await realpath(
-            requestedPath
+    resolvedPath =
+        await runFileSystemOperation(
+            () => realpath(requestedPath)
         );
-    } catch (error) {
-        return mapFileSystemError(error);
-    }
 
     /*
      * 真实路径也必须是 Markdown，
@@ -152,12 +159,18 @@ export async function openMarkdownDocument(
         undefined;
 
     try {
-        fileHandle = await open(
-            resolvedPath,
-            fsConstants.O_RDONLY
-        );
+        fileHandle =
+            await runFileSystemOperation(
+                () => open(
+                    resolvedPath,
+                    fsConstants.O_RDONLY
+                )
+            );
 
-        const stats = await fileHandle.stat();
+        const stats =
+            await runFileSystemOperation(
+                () => fileHandle!.stat()
+            );
 
         if (!stats.isFile()) {
             throw new DocumentError(
@@ -176,14 +189,18 @@ export async function openMarkdownDocument(
         }
 
         const fileBuffer =
-            await fileHandle.readFile();
+            await runFileSystemOperation(
+                () => fileHandle!.readFile()
+            );
 
         /*
          * 文件在读取过程中可能发生变化，
          * 因此读取结束后重新获取一次状态。
          */
         const finalStats =
-            await fileHandle.stat();
+            await runFileSystemOperation(
+                () => fileHandle!.stat()
+            );
 
         if (
             fileBuffer.length !==
@@ -221,7 +238,7 @@ export async function openMarkdownDocument(
                 version
             });
 
-        let displayPath = '';
+        let displayPath: string;
 
         try {
             displayPath =
@@ -253,12 +270,6 @@ export async function openMarkdownDocument(
             version:
             session.version
         };
-    } catch (error) {
-        if (error instanceof DocumentError) {
-            throw error;
-        }
-
-        return mapFileSystemError(error);
     } finally {
         await fileHandle?.close();
     }

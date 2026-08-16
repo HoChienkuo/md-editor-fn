@@ -328,10 +328,6 @@ export async function storePrivateAsset(
             }
         }
 
-        if (error instanceof AssetError) {
-            throw error;
-        }
-
         return mapAssetFileError(error);
     } finally {
         await fileHandle?.close();
@@ -375,29 +371,27 @@ export async function loadPrivateAsset(
         assetName
     );
 
+    let buffer: Buffer;
+
     try {
-        const buffer = await readFile(
+        buffer = await readFile(
             assetPath
         );
-
-        if (buffer.length > maximumImageSize) {
-            throw new AssetError(
-                'ASSET_INVALID',
-                '图片文件大小异常',
-                500
-            );
-        }
-
-        return {
-            buffer,
-            mimeType:
-                getAssetMimeType(assetName)
-        };
     } catch (error) {
-        if (error instanceof AssetError) {
-            throw error;
-        }
-
         return mapAssetFileError(error);
     }
+
+    if (buffer.length > maximumImageSize) {
+        throw new AssetError(
+            'ASSET_INVALID',
+            '图片文件大小异常',
+            500
+        );
+    }
+
+    return {
+        buffer,
+        mimeType:
+            getAssetMimeType(assetName)
+    };
 }
