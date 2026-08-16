@@ -1,0 +1,8 @@
+appname      = "md-editor-fn"
+version      = "0.1.0"
+display_name = "md-editor-fn"
+desc         = "markdown编辑器"
+platform     = "all"
+source       = "thirdparty"
+maintainer   = "HoChienkuo"
+maintainer_url  = "https://github.com/HoChienkuo"
