@@ -1,7 +1,6 @@
 import {
     useCallback,
     useEffect,
-    useMemo,
     useRef,
     useState
 } from 'react';
@@ -38,6 +37,9 @@ import {
 import {
     useUnsavedChanges
 } from '../hooks/use-unsaved-changes';
+import {
+    useMobileLayout
+} from '../hooks/use-mobile-layout';
 
 interface MarkdownDocumentEditorProps {
     openedDocument: OpenedDocument;
@@ -177,16 +179,18 @@ export function MarkdownDocumentEditor({
     const editorRef =
         useRef<ExposeParam | null>(null);
 
-    const [content, setContent] = useState(
-        openedDocument.content
-    );
+    const initialContent = openedDocument.content;
+
+    const contentRef = useRef(initialContent);
+    const savedContentRef = useRef(initialContent);
 
     const [
-        savedContent,
-        setSavedContent
-    ] = useState(
-        openedDocument.content
-    );
+        hasUnsavedChanges,
+        setHasUnsavedChanges
+    ] = useState(false);
+
+    const [contentLength, setContentLength] =
+        useState(initialContent.length);
 
     const [
         currentVersion,
@@ -200,27 +204,12 @@ export function MarkdownDocumentEditor({
     const [hasConflict, setHasConflict] =
         useState(false);
 
-    const contentRef = useRef(content);
-
-    useEffect(() => {
-        contentRef.current = content;
-    }, [content]);
-
     const [saveMessage, setSaveMessage] = useState('');
 
     const isReadOnly = openedDocument.readOnly;
 
-    const hasUnsavedChanges = useMemo(() => {
-        if (isReadOnly) {
-            return false;
-        }
-
-        return content !== savedContent;
-    }, [
-        content,
-        savedContent,
-        isReadOnly
-    ]);
+    const isMobileLayout =
+        useMobileLayout();
 
     useUnsavedChanges(hasUnsavedChanges);
 
@@ -234,14 +223,6 @@ export function MarkdownDocumentEditor({
         hasUnsavedChanges
     ]);
 
-    const handleChange = (nextContent: string) => {
-        setContent(nextContent);
-
-        if (!hasConflict) {
-            setSaveMessage('');
-        }
-    };
-
     const saveCurrentContent = useCallback(
         async (
             contentToSave: string,
@@ -251,7 +232,7 @@ export function MarkdownDocumentEditor({
                 return;
             }
 
-            if (contentToSave === savedContent) {
+            if (contentToSave === savedContentRef.current) {
                 if (mode === 'manual') {
                     setSaveMessage(
                         '当前没有需要保存的修改'
@@ -279,8 +260,11 @@ export function MarkdownDocumentEditor({
                  * 这里只把实际发送给后端的内容设为保存基准，
                  * 不会错误地把后来输入的内容标记为已保存。
                  */
-                setSavedContent(contentToSave);
+                savedContentRef.current = contentToSave;
                 setCurrentVersion(result.version);
+                setHasUnsavedChanges(
+                    contentRef.current !== contentToSave
+                );
 
                 setSaveMessage(
                     mode === 'auto'
@@ -316,9 +300,95 @@ export function MarkdownDocumentEditor({
             isReadOnly,
             isSaving,
             openedDocument.documentId,
-            savedContent
         ]
     );
+
+    const saveCurrentContentRef = useRef(
+        saveCurrentContent
+    );
+
+    useEffect(() => {
+        saveCurrentContentRef.current =
+            saveCurrentContent;
+    }, [saveCurrentContent]);
+
+    const autoSaveTimerRef = useRef<number | null>(
+        null
+    );
+
+    const lengthTimerRef = useRef<number | null>(
+        null
+    );
+
+    const handleChange = useCallback(
+        (nextContent: string) => {
+            contentRef.current = nextContent;
+
+            setHasUnsavedChanges(
+                !isReadOnly &&
+                nextContent !== savedContentRef.current
+            );
+
+            if (!hasConflict) {
+                setSaveMessage('');
+            }
+
+            if (lengthTimerRef.current !== null) {
+                window.clearTimeout(
+                    lengthTimerRef.current
+                );
+            }
+
+            lengthTimerRef.current = window.setTimeout(
+                () => {
+                    setContentLength(
+                        contentRef.current.length
+                    );
+                },
+                300
+            );
+
+            if (autoSaveTimerRef.current !== null) {
+                window.clearTimeout(
+                    autoSaveTimerRef.current
+                );
+            }
+
+            if (
+                !isReadOnly &&
+                !hasConflict &&
+                nextContent !== savedContentRef.current
+            ) {
+                autoSaveTimerRef.current =
+                    window.setTimeout(() => {
+                        void saveCurrentContentRef.current(
+                            contentRef.current,
+                            'auto'
+                        );
+                    }, 60 * 1000);
+            }
+        },
+        [
+            hasConflict,
+            isReadOnly
+        ]
+    );
+
+    useEffect(() => {
+        return () => {
+            if (autoSaveTimerRef.current !== null) {
+                window.clearTimeout(
+                    autoSaveTimerRef.current
+                );
+            }
+
+            if (lengthTimerRef.current !== null) {
+                window.clearTimeout(
+                    lengthTimerRef.current
+                );
+            }
+        };
+    }, []);
 
     const [
         isUploadingImage,
@@ -499,41 +569,12 @@ export function MarkdownDocumentEditor({
         [uploadImageFiles]
     );
 
-    const handleSave = (currentContent: string) => {
+    const handleSave = () => {
         void saveCurrentContent(
-            currentContent,
+            contentRef.current,
             'manual'
         );
     };
-
-    useEffect(() => {
-        if (
-            isReadOnly ||
-            isSaving ||
-            hasConflict ||
-            !hasUnsavedChanges
-        ) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => {
-            void saveCurrentContent(
-                contentRef.current,
-                'auto'
-            );
-        }, 60 * 1000);
-
-        return () => {
-            window.clearTimeout(timer);
-        };
-    }, [
-        content,
-        hasConflict,
-        hasUnsavedChanges,
-        isReadOnly,
-        isSaving,
-        saveCurrentContent
-    ]);
 
     const documentStatus = isReadOnly
         ? '只读'
@@ -583,6 +624,18 @@ export function MarkdownDocumentEditor({
                     <span>{encodingLabel}</span>
                     <span>{lineEndingLabel}</span>
 
+                    <span className="document-editor__mobile-state">
+                        {hasUnsavedChanges
+                            ? '内容未保存'
+                            : isReadOnly
+                                ? '只读模式'
+                                : '文件内容未修改'}
+                    </span>
+
+                    <span className="document-editor__mobile-state">
+                        {contentLength.toLocaleString()} 个字符
+                    </span>
+
                     {isReadOnly && (
                         <span className="document-editor__readonly">
                             当前文件没有写入权限
@@ -603,7 +656,13 @@ export function MarkdownDocumentEditor({
                     id={
                         `markdown-editor-${openedDocument.documentId}`
                     }
-                    value={content}
+                    preview={!isMobileLayout}
+                    inputBoxWidth={
+                        isMobileLayout
+                            ? '100%'
+                            : '50%'
+                    }
+                    value={initialContent}
                     onChange={handleChange}
                     onSave={handleSave}
                     onUploadImg={handleUploadImages}
@@ -616,6 +675,7 @@ export function MarkdownDocumentEditor({
                     readOnly={isReadOnly}
                     sanitize={sanitizePreviewHtml}
                     toolbarsExclude={['github']}
+                    footers={[]}
                 />
             </div>
 
@@ -629,7 +689,7 @@ export function MarkdownDocumentEditor({
                 </span>
 
                 <span>
-                    {content.length.toLocaleString()} 个字符
+                    {contentLength.toLocaleString()} 个字符
                 </span>
             </footer>
         </section>
