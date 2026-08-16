@@ -1,0 +1,22 @@
+{
+  "name": "md-editor-fn",
+  "version": "0.1.0",
+  "private": true,
+  "description": "适用于飞牛 fnOS 的 Markdown 文件编辑器",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "clean": "node scripts/build.mjs clean",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:frontend": "npm run build --workspace frontend",
+    "build:backend": "npm run build --workspace backend",
+    "build:app": "node scripts/build.mjs app",
+    "build:fpk": "node scripts/build.mjs fpk",
+    "build": "npm run build:app"
+  }
+}

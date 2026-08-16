@@ -1,0 +1,44 @@
+# npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build
+frontend/dist/
+
+# Backend build
+backend/dist/
+
+# Application package build
+build/
+
+# Generated package
+*.fpk
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Test and coverage output
+coverage/
+.tmp/
+temp/
+
+# Editors
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Runtime data
+*.pid
+*.sock
+*.log
