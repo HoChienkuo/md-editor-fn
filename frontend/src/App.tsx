@@ -16,6 +16,7 @@ import {
     readLaunchContext,
     type LaunchContext
 } from './services/launch-context';
+import {useOpenDocument} from "./hooks/use-open-document";
 
 type HealthResponse = {
     status: string;
@@ -155,6 +156,16 @@ function FileLaunchView({
         state,
         refresh
     } = useFileContext(context.path);
+
+    const canOpen =
+        state.status === 'success' &&
+        state.context.permissions.readable;
+
+    const documentState =
+        useOpenDocument(
+            context.path,
+            canOpen
+        );
 
     const [
         authorizationMessage,
@@ -302,6 +313,66 @@ function FileLaunchView({
                         暂时不会读取或修改文件内容。
                     </p>
                 </>
+            )}
+
+            {documentState.state.status === 'loading' && (
+                <p>正在读取 Markdown 文件……</p>
+            )}
+
+            {documentState.state.status === 'error' && (
+                <div className="document-error">
+                    <p className="status-error">
+                        无法打开 Markdown 文件
+                    </p>
+
+                    <p className="secondary">
+                        {documentState.state.message}
+                    </p>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            void documentState.reload();
+                        }}
+                    >
+                        重新读取
+                    </button>
+                </div>
+            )}
+
+            {documentState.state.status === 'success' && (
+                <section className="document-preview">
+                    <header className="document-header">
+                        <div>
+                            <strong>
+                                {documentState.state.document.name}
+                            </strong>
+
+                            {documentState.state.document.readOnly && (
+                                <span className="readonly-badge">
+            只读
+          </span>
+                            )}
+                        </div>
+
+                        <small>
+                            {documentState.state.document.encoding.name}
+                            {' · '}
+                            {documentState.state.document.lineEnding.toUpperCase()}
+                            {' · '}
+                            {documentState.state.document.version.size} 字节
+                        </small>
+                    </header>
+
+                    <pre className="markdown-source">
+      {documentState.state.document.content}
+    </pre>
+
+                    <p className="secondary">
+                        documentId：
+                        {documentState.state.document.documentId}
+                    </p>
+                </section>
             )}
         </>
     );

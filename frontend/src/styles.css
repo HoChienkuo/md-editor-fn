@@ -216,3 +216,81 @@ button:disabled {
         background: #2d2300;
     }
 }
+
+.document-preview {
+    margin-top: 24px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.document-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #d0d7de;
+    background: #f6f8fa;
+}
+
+.document-header small {
+    color: #656d76;
+    text-align: right;
+}
+
+.readonly-badge {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    color: #57606a;
+    background: #d8dee4;
+    font-size: 12px;
+}
+
+.markdown-source {
+    max-height: 480px;
+    margin: 0;
+    padding: 16px;
+    overflow: auto;
+    color: inherit;
+    background: #fff;
+    font-family:
+            "SFMono-Regular",
+            Consolas,
+            "Liberation Mono",
+            monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.document-error {
+    margin-top: 20px;
+}
+
+@media (prefers-color-scheme: dark) {
+    .document-preview,
+    .document-header {
+        border-color: #30363d;
+    }
+
+    .document-header {
+        background: #161b22;
+    }
+
+    .document-header small {
+        color: #8b949e;
+    }
+
+    .readonly-badge {
+        color: #c9d1d9;
+        background: #30363d;
+    }
+
+    .markdown-source {
+        background: #0d1117;
+    }
+}

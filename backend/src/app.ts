@@ -1,6 +1,9 @@
 import {
     fileContextRouter
 } from './routes/file-context.js';
+import {
+    documentsRouter
+} from './routes/documents.js';
 import express from 'express';
 import type {
     NextFunction,
@@ -61,6 +64,11 @@ export function createApplication() {
     router.use(
         '/api/fnos',
         fileContextRouter
+    );
+
+    router.use(
+        '/api/documents',
+        documentsRouter
     );
 
     /*

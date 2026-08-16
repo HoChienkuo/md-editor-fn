@@ -7,23 +7,26 @@ import adapterFetch from 'alova/fetch';
 type ApiErrorBody = {
     error?: string;
     message?: string;
-    code?: number;
+    code?: string | number;
 };
 
 export class ApiRequestError extends Error {
     readonly status: number;
-    readonly code?: number;
+    readonly code?: string | number;
+    readonly errorType?: string;
 
     constructor(
         message: string,
         status: number,
-        code?: number
+        code?: string | number,
+        errorType?: string
     ) {
         super(message);
 
         this.name = 'ApiRequestError';
         this.status = status;
         this.code = code;
+        this.errorType = errorType;
     }
 }
 
@@ -50,7 +53,8 @@ export const apiClient = createAlova({
             body.message ??
             `请求失败：HTTP ${response.status}`,
             response.status,
-            body.code
+            body.code,
+            body.error
         );
     }
 });
