@@ -15,8 +15,30 @@ const scriptFile = fileURLToPath(import.meta.url);
 const scriptDirectory = path.dirname(scriptFile);
 const rootDirectory = path.resolve(scriptDirectory, '..');
 
-const buildDirectory = path.join(rootDirectory, 'build');
-const packageDirectory = path.join(buildDirectory, 'package');
+const buildDirectory = path.join(
+    rootDirectory,
+    'build'
+);
+
+const packageDirectory = path.join(
+    buildDirectory,
+    'package'
+);
+
+const packageAppDirectory = path.join(
+    packageDirectory,
+    'app'
+);
+
+const packageServerDirectory = path.join(
+    packageAppDirectory,
+    'server'
+);
+
+const packagePublicDirectory = path.join(
+    packageAppDirectory,
+    'public'
+);
 
 const frontendDirectory = path.join(rootDirectory, 'frontend');
 const backendDirectory = path.join(rootDirectory, 'backend');
@@ -206,15 +228,20 @@ function createRuntimePackageJson() {
         version: backendPackage.version,
         private: true,
         type: 'module',
-        main: 'server/index.js',
+        main: 'index.js',
         engines: {
             node: '>=22 <23'
         },
         dependencies: backendPackage.dependencies ?? {}
     };
 
+    ensureDirectory(packageServerDirectory);
+
     writeFileSync(
-        path.join(packageDirectory, 'package.json'),
+        path.join(
+            packageServerDirectory,
+            'package.json'
+        ),
         `${JSON.stringify(runtimePackage, null, 2)}\n`,
         'utf8'
     );
@@ -255,14 +282,29 @@ function assembleApplication() {
         path.join(packageDirectory, 'config')
     );
 
+    const appDirectory = path.join(
+        rootDirectory,
+        'app'
+    );
+
+    if (existsSync(appDirectory)) {
+        copyFileOrDirectory(
+            appDirectory,
+            path.join(packageDirectory, 'app')
+        );
+    }
+
+    /*
+     * fnpack 会打包 app 目录中的应用内容。
+     */
     copyFileOrDirectory(
         backendDistDirectory,
-        path.join(packageDirectory, 'server')
+        packageServerDirectory
     );
 
     copyFileOrDirectory(
         frontendDistDirectory,
-        path.join(packageDirectory, 'public')
+        packagePublicDirectory
     );
 
     createRuntimePackageJson();
@@ -272,7 +314,7 @@ function assembleApplication() {
 
 function installProductionDependencies() {
     const runtimePackagePath = path.join(
-        packageDirectory,
+        packageServerDirectory,
         'package.json'
     );
 
@@ -299,7 +341,7 @@ function installProductionDependencies() {
             '--ignore-scripts'
         ],
         {
-            cwd: packageDirectory
+            cwd: packageServerDirectory
         }
     );
 }

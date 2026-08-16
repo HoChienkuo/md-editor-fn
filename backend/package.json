@@ -1,6 +1,6 @@
 {
   "name": "@md-editor-fn/backend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,8 +10,12 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
   "devDependencies": {
     "@types/node": "^22.15.30",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@types/express": "^5.0.3"
   }
 }

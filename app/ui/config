@@ -1,0 +1,15 @@
+{
+  ".url": {
+    "md-editor-fn.service": {
+      "title": "Markdown 编辑器",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/md-editor-fn",
+      "gatewaySocket": "app.sock",
+      "url": "/app/md-editor-fn/",
+      "allUsers": true,
+      "noDisplay": true
+    }
+  }
+}

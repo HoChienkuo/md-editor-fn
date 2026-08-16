@@ -1,5 +1,5 @@
 appname = "md-editor-fn"
-version = "0.1.0"
+version = "0.1.1"
 display_name = "md-editor-fn"
 desc = "适用于飞牛 fnOS 的 Markdown 文件编辑器"
 platform = "all"
@@ -7,3 +7,5 @@ source = "thirdparty"
 maintainer = "HoChienkuo"
 maintainer_url = "https://github.com/HoChienkuo"
 install_dep_packages = "nodejs_v22"
+
+desktop_uidir = "ui"

@@ -85,3 +85,48 @@ textarea {
         color: #8b949e;
     }
 }
+
+.status-success {
+    color: #1a7f37;
+    font-weight: 600;
+}
+
+.status-error {
+    color: #cf222e;
+    font-weight: 600;
+}
+
+.health-details {
+    display: grid;
+    gap: 10px;
+    margin: 24px 0;
+}
+
+.health-details div {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 16px;
+}
+
+.health-details dt {
+    color: #656d76;
+}
+
+.health-details dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (prefers-color-scheme: dark) {
+    .status-success {
+        color: #3fb950;
+    }
+
+    .status-error {
+        color: #f85149;
+    }
+
+    .health-details dt {
+        color: #8b949e;
+    }
+}
