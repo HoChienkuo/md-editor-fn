@@ -21,6 +21,13 @@ export const applicationDirectory =
     process.env.APPLICATION_DIRECTORY ??
     inferredApplicationDirectory;
 
+export const applicationDataDirectory =
+    process.env.APPLICATION_DATA_DIRECTORY ??
+    path.join(
+        applicationDirectory,
+        'var'
+    );
+
 export const publicDirectory = path.join(
     applicationDirectory,
     'public'
@@ -36,4 +43,4 @@ export const gatewayPrefix =
 
 export const applicationName = 'md-editor-fn';
 
-export const applicationVersion = '0.1.6';
+export const applicationVersion = '0.1.7';

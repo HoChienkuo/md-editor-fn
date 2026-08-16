@@ -9,7 +9,11 @@ import DOMPurify from 'dompurify';
 import {
     MdEditor
 } from 'md-editor-rt';
-
+import type {
+    ExposeParam,
+    UploadImgCallBackParam,
+    UploadImgEvent
+} from 'md-editor-rt';
 import {
     saveDocument
 } from '../services/document-api';
@@ -18,7 +22,13 @@ import type {
     DocumentVersion,
     OpenedDocument
 } from '../services/document-api';
+import {
+    uploadAsset
+} from '../services/asset-api';
 
+import type {
+    UploadedAsset
+} from '../services/asset-api';
 import {
     ApiRequestError
 } from '../services/api-client';
@@ -51,6 +61,96 @@ function sanitizePreviewHtml(html: string): string {
     );
 }
 
+type InsertedImage = {
+    url: string;
+    alt: string;
+    title: string;
+};
+
+function createImageDescription(
+    fileName: string
+): string {
+    const withoutExtension =
+        fileName.replace(
+            /\.[^.]+$/,
+            ''
+        );
+
+    const sanitized = withoutExtension
+        .replace(
+            /[\[\]\\\r\n"]/g,
+            ' '
+        )
+        .replace(
+            /\s+/g,
+            ' '
+        )
+        .trim()
+        .slice(0, 100);
+
+    return sanitized || '图片';
+}
+
+function toInsertedImage(
+    asset: UploadedAsset
+): InsertedImage {
+    const description =
+        createImageDescription(
+            asset.originalName
+        );
+
+    return {
+        url: asset.previewUrl,
+        alt: description,
+        title: description
+    };
+}
+
+function transformInsertedImageUrl(
+    imageUrl: string
+): string {
+    const value = imageUrl.trim();
+
+    /*
+     * 允许本应用的私有图片 URL。
+     */
+    if (
+        value.startsWith(
+            '/app/md-editor-fn/api/assets/'
+        )
+    ) {
+        return value;
+    }
+
+    /*
+     * 当前阶段只允许 HTTPS 网络图片。
+     */
+    try {
+        const parsedUrl = new URL(value);
+
+        if (parsedUrl.protocol === 'https:') {
+            return parsedUrl.href;
+        }
+    } catch {
+        // 相对路径和无效链接暂不支持。
+    }
+
+    return '';
+}
+
+function createImageMarkdown(
+    images: InsertedImage[]
+): string {
+    return images
+        .map((image) => {
+            return (
+                `![${image.alt}]` +
+                `(${image.url} "${image.title}")`
+            );
+        })
+        .join('\n\n');
+}
+
 function getLineEndingLabel(
     lineEnding: OpenedDocument['lineEnding']
 ): string {
@@ -73,6 +173,9 @@ export function MarkdownDocumentEditor({
                                            openedDocument
                                        }: MarkdownDocumentEditorProps) {
     const theme = useColorTheme();
+
+    const editorRef =
+        useRef<ExposeParam | null>(null);
 
     const [content, setContent] = useState(
         openedDocument.content
@@ -217,6 +320,185 @@ export function MarkdownDocumentEditor({
         ]
     );
 
+    const [
+        isUploadingImage,
+        setIsUploadingImage
+    ] = useState(false);
+
+    const uploadImageFiles = useCallback(
+        async (
+            files: File[]
+        ): Promise<InsertedImage[]> => {
+            if (isReadOnly) {
+                setSaveMessage(
+                    '当前文件为只读文件，不能插入图片'
+                );
+
+                return [];
+            }
+
+            if (
+                isUploadingImage ||
+                files.length === 0
+            ) {
+                return [];
+            }
+
+            setIsUploadingImage(true);
+
+            setSaveMessage(
+                files.length > 1
+                    ? `正在上传 ${files.length} 张图片……`
+                    : '正在上传图片……'
+            );
+
+            const uploadedImages:
+                InsertedImage[] = [];
+
+            const failureMessages:
+                string[] = [];
+
+            /*
+             * 顺序上传，避免多张 10 MB 图片同时进入后端内存。
+             */
+            for (const file of files) {
+                try {
+                    const asset =
+                        await uploadAsset(file);
+
+                    uploadedImages.push(
+                        toInsertedImage(asset)
+                    );
+                } catch (error) {
+                    const message =
+                        error instanceof Error
+                            ? error.message
+                            : '未知错误';
+
+                    failureMessages.push(
+                        `${file.name}：${message}`
+                    );
+                }
+            }
+
+            setIsUploadingImage(false);
+
+            if (
+                uploadedImages.length > 0 &&
+                failureMessages.length === 0
+            ) {
+                setSaveMessage(
+                    uploadedImages.length > 1
+                        ? `已上传 ${uploadedImages.length} 张图片`
+                        : '图片上传成功'
+                );
+            } else if (
+                uploadedImages.length > 0 &&
+                failureMessages.length > 0
+            ) {
+                setSaveMessage(
+                    `已上传 ${uploadedImages.length} 张，` +
+                    `${failureMessages.length} 张失败：` +
+                    failureMessages.join('；')
+                );
+            } else {
+                setSaveMessage(
+                    `图片上传失败：${
+                        failureMessages.join('；') ||
+                        '没有可上传的图片'
+                    }`
+                );
+            }
+
+            return uploadedImages;
+        },
+        [
+            isReadOnly,
+            isUploadingImage
+        ]
+    );
+
+    const handleUploadImages:
+        UploadImgEvent = useCallback(
+        (
+            files,
+            callback
+        ) => {
+            void (
+                async () => {
+                    const uploadedImages =
+                        await uploadImageFiles(
+                            files
+                        );
+
+                    if (
+                        uploadedImages.length === 0
+                    ) {
+                        return;
+                    }
+
+                    const callbackValue:
+                        UploadImgCallBackParam =
+                        uploadedImages;
+
+                    /*
+                     * md-editor-rt 自动把这些地址
+                     * 插入当前光标位置。
+                     */
+                    callback(callbackValue);
+                }
+            )();
+        },
+        [uploadImageFiles]
+    );
+
+    const handleDrop = useCallback(
+        (event: DragEvent) => {
+            const files = Array.from(
+                event.dataTransfer?.files ?? []
+            ).filter((file) => {
+                return file.type.startsWith(
+                    'image/'
+                );
+            });
+
+            if (files.length === 0) {
+                return;
+            }
+
+            event.preventDefault();
+
+            void (
+                async () => {
+                    const uploadedImages =
+                        await uploadImageFiles(
+                            files
+                        );
+
+                    if (
+                        uploadedImages.length === 0
+                    ) {
+                        return;
+                    }
+
+                    const markdown =
+                        createImageMarkdown(
+                            uploadedImages
+                        );
+
+                    editorRef.current?.insert(
+                        () => ({
+                            targetValue:
+                                `\n${markdown}\n`,
+                            select: false
+                        })
+                    );
+                }
+            )();
+        },
+        [uploadImageFiles]
+    );
+
     const handleSave = (currentContent: string) => {
         void saveCurrentContent(
             currentContent,
@@ -317,16 +599,21 @@ export function MarkdownDocumentEditor({
 
             <div className="document-editor__main">
                 <MdEditor
+                    ref={editorRef}
                     id={
                         `markdown-editor-${openedDocument.documentId}`
                     }
                     value={content}
                     onChange={handleChange}
                     onSave={handleSave}
+                    onUploadImg={handleUploadImages}
+                    onDrop={handleDrop}
+                    transformImgUrl={
+                        transformInsertedImageUrl
+                    }
                     theme={theme}
                     language={getEditorLanguage()}
                     readOnly={isReadOnly}
-                    noUploadImg
                     sanitize={sanitizePreviewHtml}
                     toolbarsExclude={['github']}
                 />

@@ -89,6 +89,7 @@ start_app() {
     log_msg "Socket: ${SOCKET_FILE}"
 
     APPLICATION_DIRECTORY="${APP_DIR}" \
+    APPLICATION_DATA_DIRECTORY="${VAR_DIR}" \
     SOCKET_PATH="${SOCKET_FILE}" \
     GATEWAY_PREFIX="${GATEWAY_PREFIX}" \
     "${NODE_BIN}" "${SERVER_FILE}" >> "${LOG_FILE}" 2>&1 &

@@ -19,6 +19,7 @@ import {
 } from './config.js';
 
 import {logger} from './logger.js';
+import {assetsRouter} from "./routes/assets.js";
 
 export function createApplication() {
     const app = express();
@@ -69,6 +70,11 @@ export function createApplication() {
     router.use(
         '/api/documents',
         documentsRouter
+    );
+
+    router.use(
+        '/api/assets',
+        assetsRouter
     );
 
     /*
