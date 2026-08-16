@@ -1,7 +1,13 @@
 import {
     useEffect,
+    useMemo,
     useState
 } from 'react';
+
+import {
+    readLaunchContext,
+    type LaunchContext
+} from './services/launch-context';
 
 type HealthResponse = {
     status: string;
@@ -11,7 +17,7 @@ type HealthResponse = {
     uptimeSeconds: number;
 };
 
-type LoadState =
+type HealthState =
     | {
     status: 'loading';
 }
@@ -24,23 +30,16 @@ type LoadState =
     message: string;
 };
 
-export function App() {
-    const [state, setState] = useState<LoadState>({
+function useHealthCheck(): HealthState {
+    const [state, setState] = useState<HealthState>({
         status: 'loading'
     });
 
     useEffect(() => {
         const abortController = new AbortController();
 
-        async function loadHealth() {
+        async function loadHealth(): Promise<void> {
             try {
-                /*
-                 * 页面入口使用尾随斜杠：
-                 * /app/md-editor-fn/
-                 *
-                 * 因此相对地址会解析为：
-                 * /app/md-editor-fn/api/health
-                 */
                 const response = await fetch(
                     './api/health',
                     {
@@ -53,7 +52,7 @@ export function App() {
 
                 if (!response.ok) {
                     throw new Error(
-                        `健康检查失败：HTTP ${response.status}`
+                        `HTTP ${response.status}`
                     );
                 }
 
@@ -89,61 +88,151 @@ export function App() {
         };
     }, []);
 
+    return state;
+}
+
+function MissingPathView() {
+    return (
+        <>
+            <h1>Markdown 编辑器</h1>
+
+            <p className="status-warning">
+                没有指定要打开的文件
+            </p>
+
+            <p className="secondary">
+                请在飞牛文件管理器中选择一个 .md 或
+                .markdown 文件，并使用 Markdown 编辑器打开。
+            </p>
+        </>
+    );
+}
+
+function InvalidPathView({
+                             context
+                         }: {
+    context: Extract<
+        LaunchContext,
+        {
+            type: 'invalid-path';
+        }
+    >;
+}) {
+    return (
+        <>
+            <h1>无法打开文件</h1>
+
+            <p className="status-error">
+                启动参数无效
+            </p>
+
+            <p className="secondary">
+                {context.reason}
+            </p>
+        </>
+    );
+}
+
+function FileLaunchView({
+                            context,
+                            healthState
+                        }: {
+    context: Extract<
+        LaunchContext,
+        {
+            type: 'file';
+        }
+    >;
+    healthState: HealthState;
+}) {
+    return (
+        <>
+            <h1>{context.fileName}</h1>
+
+            <p className="status-success">
+                已收到 fnOS 文件打开请求
+            </p>
+
+            <dl className="launch-details">
+                <div>
+                    <dt>文件名</dt>
+                    <dd>{context.fileName}</dd>
+                </div>
+
+                <div>
+                    <dt>扩展名</dt>
+                    <dd>.{context.extension}</dd>
+                </div>
+
+                <div>
+                    <dt>文件路径</dt>
+                    <dd>{context.path}</dd>
+                </div>
+
+                <div>
+                    <dt>后端服务</dt>
+
+                    <dd>
+                        {healthState.status === 'loading' && (
+                            '正在检查……'
+                        )}
+
+                        {healthState.status === 'success' && (
+                            `运行正常，Node.js ${healthState.health.node}`
+                        )}
+
+                        {healthState.status === 'error' && (
+                            `连接失败：${healthState.message}`
+                        )}
+                    </dd>
+                </div>
+            </dl>
+
+            <p className="secondary">
+                当前阶段只验证文件入口和 path 参数，
+                暂时不会读取或修改这个文件。
+            </p>
+        </>
+    );
+}
+
+export function App() {
+    const launchContext = useMemo(
+        () => readLaunchContext(),
+        []
+    );
+
+    const healthState = useHealthCheck();
+
+    useEffect(() => {
+        if (launchContext.type === 'file') {
+            document.title =
+                `${launchContext.fileName} - Markdown 编辑器`;
+
+            return;
+        }
+
+        document.title = 'Markdown 编辑器';
+    }, [launchContext]);
+
     return (
         <main className="app-shell">
             <section className="status-card">
-                <h1>Markdown 编辑器</h1>
-
-                {state.status === 'loading' && (
-                    <p>正在连接后端服务……</p>
+                {launchContext.type === 'missing-path' && (
+                    <MissingPathView />
                 )}
 
-                {state.status === 'error' && (
-                    <>
-                        <p className="status-error">
-                            后端服务连接失败
-                        </p>
-
-                        <p className="secondary">
-                            {state.message}
-                        </p>
-                    </>
+                {launchContext.type === 'invalid-path' && (
+                    <InvalidPathView
+                        context={launchContext}
+                    />
                 )}
 
-                {state.status === 'success' && (
-                    <>
-                        <p className="status-success">
-                            后端服务运行正常
-                        </p>
-
-                        <dl className="health-details">
-                            <div>
-                                <dt>应用</dt>
-                                <dd>{state.health.app}</dd>
-                            </div>
-
-                            <div>
-                                <dt>版本</dt>
-                                <dd>{state.health.version}</dd>
-                            </div>
-
-                            <div>
-                                <dt>Node.js</dt>
-                                <dd>{state.health.node}</dd>
-                            </div>
-
-                            <div>
-                                <dt>运行时间</dt>
-                                <dd>
-                                    {state.health.uptimeSeconds} 秒
-                                </dd>
-                            </div>
-                        </dl>
-
-                        <p className="secondary">
-                            文件打开和 Markdown 编辑功能将在后续阶段接入。
-                        </p>
-                    </>
+                {launchContext.type === 'file' && (
+                    <FileLaunchView
+                        context={launchContext}
+                        healthState={healthState}
+                    />
                 )}
             </section>
         </main>

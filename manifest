@@ -1,6 +1,6 @@
 appname = "md-editor-fn"
-version = "0.1.1"
-display_name = "md-editor-fn"
+version = "0.1.2"
+display_name = "Markdown 编辑器"
 desc = "适用于飞牛 fnOS 的 Markdown 文件编辑器"
 platform = "all"
 source = "thirdparty"

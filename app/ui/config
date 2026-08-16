@@ -9,6 +9,10 @@
       "gatewaySocket": "app.sock",
       "url": "/app/md-editor-fn/",
       "allUsers": true,
+      "fileTypes": [
+        "md",
+        "markdown"
+      ],
       "noDisplay": true
     }
   }
