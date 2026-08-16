@@ -17,6 +17,7 @@ import {
     type LaunchContext
 } from './services/launch-context';
 import {useOpenDocument} from "./hooks/use-open-document";
+import {MarkdownDocumentEditor} from "./components/MarkdownDocumentEditor";
 
 type HealthResponse = {
     status: string;
@@ -341,38 +342,10 @@ function FileLaunchView({
             )}
 
             {documentState.state.status === 'success' && (
-                <section className="document-preview">
-                    <header className="document-header">
-                        <div>
-                            <strong>
-                                {documentState.state.document.name}
-                            </strong>
-
-                            {documentState.state.document.readOnly && (
-                                <span className="readonly-badge">
-            只读
-          </span>
-                            )}
-                        </div>
-
-                        <small>
-                            {documentState.state.document.encoding.name}
-                            {' · '}
-                            {documentState.state.document.lineEnding.toUpperCase()}
-                            {' · '}
-                            {documentState.state.document.version.size} 字节
-                        </small>
-                    </header>
-
-                    <pre className="markdown-source">
-      {documentState.state.document.content}
-    </pre>
-
-                    <p className="secondary">
-                        documentId：
-                        {documentState.state.document.documentId}
-                    </p>
-                </section>
+                <MarkdownDocumentEditor
+                    key={documentState.state.document.documentId}
+                    openedDocument={documentState.state.document}
+                />
             )}
         </>
     );
