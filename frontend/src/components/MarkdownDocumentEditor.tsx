@@ -4,7 +4,6 @@ import {
     useRef,
     useState
 } from 'react';
-import DOMPurify from 'dompurify';
 import {
     MdEditor
 } from 'md-editor-rt';
@@ -51,16 +50,6 @@ function getEditorLanguage(): 'zh-CN' | 'en-US' {
     return language.startsWith('zh')
         ? 'zh-CN'
         : 'en-US';
-}
-
-function sanitizePreviewHtml(html: string): string {
-    return String(
-        DOMPurify.sanitize(html, {
-            USE_PROFILES: {
-                html: true
-            }
-        })
-    );
 }
 
 type InsertedImage = {
@@ -678,7 +667,6 @@ export function MarkdownDocumentEditor({
                     theme={theme}
                     language={getEditorLanguage()}
                     readOnly={isReadOnly}
-                    sanitize={sanitizePreviewHtml}
                     toolbarsExclude={['github']}
                     footers={[]}
                 />
