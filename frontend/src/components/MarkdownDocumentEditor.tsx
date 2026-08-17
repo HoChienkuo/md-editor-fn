@@ -181,6 +181,10 @@ export function MarkdownDocumentEditor({
 
     const initialContent = openedDocument.content;
 
+    const [content, setContent] = useState(
+        initialContent
+    );
+
     const contentRef = useRef(initialContent);
     const savedContentRef = useRef(initialContent);
 
@@ -322,6 +326,7 @@ export function MarkdownDocumentEditor({
 
     const handleChange = useCallback(
         (nextContent: string) => {
+            setContent(nextContent);
             contentRef.current = nextContent;
 
             setHasUnsavedChanges(
@@ -662,7 +667,7 @@ export function MarkdownDocumentEditor({
                             ? '100%'
                             : '50%'
                     }
-                    value={initialContent}
+                    value={content}
                     onChange={handleChange}
                     onSave={handleSave}
                     onUploadImg={handleUploadImages}
