@@ -5,8 +5,17 @@ import {
     useState
 } from 'react';
 import {
+    allToolbar,
     MdEditor
 } from 'md-editor-rt';
+import {
+    Emoji,
+    ExportPDF,
+    Mark
+} from '@vavt/rt-extension';
+import '@vavt/rt-extension/lib/asset/Emoji.css';
+import '@vavt/rt-extension/lib/asset/ExportPDF.css';
+import '@vavt/rt-extension/lib/asset/Mark.css';
 import type {
     ExposeParam,
     UploadImgCallBackParam,
@@ -39,6 +48,29 @@ import {
 import {
     useMobileLayout
 } from '../hooks/use-mobile-layout';
+
+const taskToolbarIndex =
+    allToolbar.indexOf('task');
+
+const saveToolbarIndex =
+    allToolbar.indexOf('save');
+
+const editorToolbars = [
+    ...allToolbar.slice(
+        0,
+        taskToolbarIndex + 1
+    ),
+    0,
+    1,
+    ...allToolbar.slice(
+        taskToolbarIndex + 1,
+        saveToolbarIndex + 1
+    ),
+    2,
+    ...allToolbar.slice(
+        saveToolbarIndex + 1
+    )
+];
 
 interface MarkdownDocumentEditorProps {
     openedDocument: OpenedDocument;
@@ -667,6 +699,21 @@ export function MarkdownDocumentEditor({
                     theme={theme}
                     language={getEditorLanguage()}
                     readOnly={isReadOnly}
+                    toolbars={editorToolbars}
+                    defToolbars={[
+                        <Mark
+                            key="mark"
+                            title="标注"
+                        />,
+                        <Emoji
+                            key="emoji"
+                            title="Emoji"
+                        />,
+                        <ExportPDF
+                            key="export-pdf"
+                            value={content}
+                        />
+                    ]}
                     toolbarsExclude={['github']}
                     footers={[]}
                 />
