@@ -11,11 +11,13 @@ import {
 import {
     Emoji,
     ExportPDF,
-    Mark
+    Mark,
+    ThemeSwitch
 } from '@vavt/rt-extension';
 import '@vavt/rt-extension/lib/asset/Emoji.css';
 import '@vavt/rt-extension/lib/asset/ExportPDF.css';
 import '@vavt/rt-extension/lib/asset/Mark.css';
+import '@vavt/rt-extension/lib/asset/ThemeSwitch.css';
 import type {
     ExposeParam,
     UploadImgCallBackParam,
@@ -55,6 +57,9 @@ const taskToolbarIndex =
 const saveToolbarIndex =
     allToolbar.indexOf('save');
 
+const rightToolbarIndex =
+    allToolbar.indexOf('=');
+
 const editorToolbars = [
     ...allToolbar.slice(
         0,
@@ -68,7 +73,12 @@ const editorToolbars = [
     ),
     2,
     ...allToolbar.slice(
-        saveToolbarIndex + 1
+        saveToolbarIndex + 1,
+        rightToolbarIndex + 1
+    ),
+    3,
+    ...allToolbar.slice(
+        rightToolbarIndex + 1
     )
 ];
 
@@ -195,7 +205,10 @@ function getLineEndingLabel(
 export function MarkdownDocumentEditor({
                                            openedDocument
                                        }: MarkdownDocumentEditorProps) {
-    const theme = useColorTheme();
+    const systemTheme = useColorTheme();
+    const [selectedTheme, setSelectedTheme] =
+        useState<typeof systemTheme | null>(null);
+    const theme = selectedTheme ?? systemTheme;
 
     const editorRef =
         useRef<ExposeParam | null>(null);
@@ -722,6 +735,16 @@ export function MarkdownDocumentEditor({
                                     ? 'calc(100vh - 16px)'
                                     : '600px'
                             }
+                        />,
+                        <ThemeSwitch
+                            key="theme-switch"
+                            value={theme}
+                            title={
+                                theme === 'light'
+                                    ? '切换到深色模式'
+                                    : '切换到浅色模式'
+                            }
+                            onChange={setSelectedTheme}
                         />
                     ]}
                     toolbarsExclude={['github']}
