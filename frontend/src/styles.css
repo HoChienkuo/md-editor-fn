@@ -332,6 +332,35 @@ button:disabled {
 }
 
 @media (max-width: 720px) {
+    .md-editor-modal-container > .export-pdf-modal > .md-editor-modal {
+        max-width: calc(100vw - 16px);
+        max-height: calc(100vh - 16px);
+    }
+
+    .export-pdf-modal .md-editor-modal-header {
+        padding-inline: 16px;
+    }
+
+    .export-pdf-modal .md-editor-modal-body {
+        padding: 12px;
+    }
+
+    .export-pdf-content {
+        max-width: 100%;
+        overscroll-behavior: contain;
+    }
+
+    .export-pdf-content .md-editor-preview {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .export-pdf-content img,
+    .export-pdf-content svg,
+    .export-pdf-content canvas {
+        max-width: 100%;
+    }
+
     .document-editor__header {
         align-items: flex-start;
         flex-direction: column;

@@ -43,4 +43,4 @@ export const gatewayPrefix =
 
 export const applicationName = 'md-editor-fn';
 
-export const applicationVersion = '0.1.15';
+export const applicationVersion = '0.1.16';

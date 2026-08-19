@@ -712,6 +712,16 @@ export function MarkdownDocumentEditor({
                         <ExportPDF
                             key="export-pdf"
                             value={content}
+                            width={
+                                isMobileLayout
+                                    ? 'calc(100vw - 16px)'
+                                    : '870px'
+                            }
+                            height={
+                                isMobileLayout
+                                    ? 'calc(100vh - 16px)'
+                                    : '600px'
+                            }
                         />
                     ]}
                     toolbarsExclude={['github']}
