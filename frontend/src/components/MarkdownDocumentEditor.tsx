@@ -55,6 +55,9 @@ import {
 import {
     useMobileLayout
 } from '../hooks/use-mobile-layout';
+import {
+    openExternalUrl
+} from '../services/fnos-sdk';
 
 const taskToolbarIndex =
     allToolbar.indexOf('task');
@@ -1076,13 +1079,34 @@ export function MarkdownDocumentEditor({
 
     const handlePreviewTableClick = useCallback(
         (event: ReactMouseEvent<HTMLDivElement>) => {
-            if (isReadOnly) {
-                return;
-            }
-
             const target = event.target;
 
             if (!(target instanceof Element)) {
+                return;
+            }
+
+            const externalLink = target.closest<
+                HTMLAnchorElement
+            >(
+                '.md-editor-preview a[href^="http://"], ' +
+                '.md-editor-preview a[href^="https://"]'
+            );
+
+            if (externalLink) {
+                event.preventDefault();
+
+                void openExternalUrl(
+                    externalLink.href
+                ).catch(() => {
+                    setSaveMessage(
+                        '无法打开外部链接，请检查浏览器或系统设置'
+                    );
+                });
+
+                return;
+            }
+
+            if (isReadOnly) {
                 return;
             }
 

@@ -4,6 +4,13 @@ import {
 
 const sdk = new TrimApp();
 
+export async function openExternalUrl(
+    url: string
+): Promise<void> {
+    await sdk.ready();
+    await sdk.openURL(url, '_blank');
+}
+
 export class FileAuthorizationError
     extends Error {
     constructor(message: string) {

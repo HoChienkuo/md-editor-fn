@@ -39,6 +39,51 @@ function editablePreviewTablePlugin(
     );
 }
 
+function externalLinkPlugin(
+    markdownIt: MarkdownIt
+) {
+    markdownIt.core.ruler.after(
+        'inline',
+        'external-link-behavior',
+        (state) => {
+            state.tokens.forEach((token) => {
+                if (token.type !== 'inline') {
+                    return;
+                }
+
+                token.children?.forEach((child) => {
+                    if (child.type !== 'link_open') {
+                        return;
+                    }
+
+                    const originalHref =
+                        child.attrGet('href');
+
+                    if (!originalHref) {
+                        return;
+                    }
+
+                    const href = /^www\./i.test(originalHref)
+                        ? `https://${originalHref}`
+                        : originalHref;
+
+                    if (href !== originalHref) {
+                        child.attrSet('href', href);
+                    }
+
+                    if (/^https?:\/\//i.test(href)) {
+                        child.attrSet('target', '_blank');
+                        child.attrSet(
+                            'rel',
+                            'noopener noreferrer'
+                        );
+                    }
+                });
+            });
+        }
+    );
+}
+
 /*
  * md-editor-rt 默认对预览更新做 500ms 防抖。
  * 编辑内容已经由受控状态同步，这里设为 100ms 以便输入即渲染。
@@ -74,6 +119,11 @@ config({
             {
                 type: 'editablePreviewTable',
                 plugin: editablePreviewTablePlugin,
+                options: {}
+            },
+            {
+                type: 'externalLink',
+                plugin: externalLinkPlugin,
                 options: {}
             },
             {
