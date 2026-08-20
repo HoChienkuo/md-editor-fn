@@ -1,7 +1,7 @@
 appname = "md-editor-fn"
 version = "0.1.18"
 display_name = "Markdown 编辑器"
-desc = "<p>一款适用于飞牛 fnOS 的 Markdown 文件编辑器。</p><p>支持 Markdown 编辑、自动保存、实时预览、图片上传及文件管理器右键打开方式。</p><p>推荐在系统设置->应用->默认应用->搜索 .md 设置为本应用。</p><p><strong>运行环境：</strong>Node.js v22</p>"
+desc = "<p>适用于飞牛 fnOS 的 Markdown 文件编辑器，可从文件管理器直接打开、编辑和保存 .md 与 .markdown 文件。</p><p>支持实时预览、预览区直接编辑表格、任务列表交互、自动保存、图片上传和导出 PDF。</p><p>可在“系统设置 → 应用 → 默认应用”中设为 Markdown 文件的默认打开方式。</p>"
 platform = "all"
 source = "thirdparty"
 maintainer = "HoChienkuo"
