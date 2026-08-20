@@ -382,6 +382,46 @@ button:disabled {
     }
 }
 
+.document-editor:not(.document-editor--readonly)
+    .md-editor-preview
+    table.editable-preview-table
+    > :is(thead, tbody, tfoot)
+    > tr
+    > :is(th, td) {
+    cursor: text;
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease;
+}
+
+.document-editor:not(.document-editor--readonly)
+    .md-editor-preview
+    table.editable-preview-table
+    > :is(thead, tbody, tfoot)
+    > tr
+    > :is(th, td):hover {
+    background-color: rgba(22, 119, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.45);
+}
+
+.document-editor
+    .md-editor-preview
+    .editable-preview-table__cell--editing {
+    min-width: 80px;
+    outline: 2px solid #1677ff;
+    outline-offset: -2px;
+    background: #ffffff;
+    color: #1f2328;
+    white-space: pre-wrap;
+}
+
+.document-editor--dark
+    .md-editor-preview
+    .editable-preview-table__cell--editing {
+    background: #252525;
+    color: #e6e6e6;
+}
+
 @media (pointer: coarse) {
     .document-editor__mobile-state {
         display: inline;

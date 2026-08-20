@@ -5,10 +5,39 @@ import {
     XSSPlugin
 } from 'md-editor-rt';
 import markdownItMark from 'markdown-it-mark';
+import type MarkdownIt from 'markdown-it';
 
 import {App} from './App';
 import 'md-editor-rt/lib/style.css';
 import './styles.css';
+
+function editablePreviewTablePlugin(
+    markdownIt: MarkdownIt
+) {
+    markdownIt.core.ruler.after(
+        'block',
+        'editable-preview-table',
+        (state) => {
+            state.tokens.forEach((token) => {
+                if (
+                    token.type !== 'table_open' ||
+                    !token.map
+                ) {
+                    return;
+                }
+
+                token.attrJoin(
+                    'class',
+                    'editable-preview-table'
+                );
+                token.attrSet(
+                    'data-md-table-end',
+                    String(token.map[1])
+                );
+            });
+        }
+    );
+}
 
 /*
  * md-editor-rt 默认对预览更新做 500ms 防抖。
@@ -42,6 +71,11 @@ config({
 
         return [
             ...pluginsWithToggleableTasks,
+            {
+                type: 'editablePreviewTable',
+                plugin: editablePreviewTablePlugin,
+                options: {}
+            },
             {
                 type: 'mark',
                 plugin: markdownItMark,

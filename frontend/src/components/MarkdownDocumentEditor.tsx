@@ -4,6 +4,11 @@ import {
     useRef,
     useState
 } from 'react';
+import type {
+    FocusEvent as ReactFocusEvent,
+    KeyboardEvent as ReactKeyboardEvent,
+    MouseEvent as ReactMouseEvent
+} from 'react';
 import {
     allToolbar,
     MdEditor
@@ -99,6 +104,203 @@ type InsertedImage = {
     alt: string;
     title: string;
 };
+
+type MarkdownTableSource = {
+    from: number;
+    to: number;
+    lineEnding: string;
+    trailingLineEnding: string;
+    lines: string[];
+    cells: string[][];
+};
+
+type ActivePreviewTableCell = {
+    element: HTMLTableCellElement;
+    source: MarkdownTableSource;
+    row: number;
+    column: number;
+    originalValue: string;
+    originalHtml: string;
+};
+
+function splitMarkdownTableRow(
+    line: string
+): string[] {
+    const value = line.trim();
+    const cells: string[] = [];
+    let cell = '';
+    let backtickFence = 0;
+
+    for (let index = 0; index < value.length;) {
+        const character = value[index];
+
+        if (character === '`') {
+            let fenceLength = 1;
+
+            while (
+                value[index + fenceLength] === '`'
+            ) {
+                fenceLength += 1;
+            }
+
+            if (backtickFence === 0) {
+                backtickFence = fenceLength;
+            } else if (backtickFence === fenceLength) {
+                backtickFence = 0;
+            }
+
+            cell += value.slice(
+                index,
+                index + fenceLength
+            );
+            index += fenceLength;
+            continue;
+        }
+
+        const previousBackslashes = (() => {
+            let count = 0;
+
+            for (
+                let cursor = index - 1;
+                cursor >= 0 && value[cursor] === '\\';
+                cursor -= 1
+            ) {
+                count += 1;
+            }
+
+            return count;
+        })();
+
+        if (
+            character === '|' &&
+            backtickFence === 0 &&
+            previousBackslashes % 2 === 0
+        ) {
+            cells.push(cell.trim());
+            cell = '';
+        } else {
+            cell += character;
+        }
+
+        index += 1;
+    }
+
+    cells.push(cell.trim());
+
+    if (cells[0] === '') {
+        cells.shift();
+    }
+
+    if (cells.at(-1) === '') {
+        cells.pop();
+    }
+
+    return cells;
+}
+
+function getMarkdownTableSource(
+    markdown: string,
+    startLine: number,
+    endLine: number
+): MarkdownTableSource | null {
+    const lineStarts = [0];
+
+    for (let index = 0; index < markdown.length; index += 1) {
+        if (markdown[index] === '\n') {
+            lineStarts.push(index + 1);
+        }
+    }
+
+    if (
+        startLine < 0 ||
+        endLine <= startLine ||
+        startLine >= lineStarts.length
+    ) {
+        return null;
+    }
+
+    const from = lineStarts[startLine];
+    const to = endLine < lineStarts.length
+        ? lineStarts[endLine]
+        : markdown.length;
+    const sourceText = markdown.slice(from, to);
+    const trailingLineEnding = sourceText.endsWith('\r\n')
+        ? '\r\n'
+        : sourceText.endsWith('\n')
+            ? '\n'
+            : '';
+    const tableText = trailingLineEnding
+        ? sourceText.slice(
+            0,
+            -trailingLineEnding.length
+        )
+        : sourceText;
+    const lines = tableText.split(/\r?\n/);
+
+    if (lines.length < 2) {
+        return null;
+    }
+
+    return {
+        from,
+        to,
+        lineEnding: tableText.includes('\r\n')
+            ? '\r\n'
+            : '\n',
+        trailingLineEnding,
+        lines,
+        cells: [
+            splitMarkdownTableRow(lines[0]),
+            ...lines.slice(2).map(
+                splitMarkdownTableRow
+            )
+        ]
+    };
+}
+
+function escapeMarkdownTableCell(
+    value: string
+): string {
+    return value
+        .replace(/\r?\n/g, '<br>')
+        .replace(/(^|[^\\])\|/g, '$1\\|')
+        .trim();
+}
+
+function updateMarkdownTableCell(
+    source: MarkdownTableSource,
+    row: number,
+    column: number,
+    value: string
+): string {
+    const nextCells = source.cells.map(
+        (cells) => [...cells]
+    );
+    const targetRow = nextCells[row];
+
+    if (!targetRow) {
+        return source.lines.join(source.lineEnding);
+    }
+
+    while (targetRow.length <= column) {
+        targetRow.push('');
+    }
+
+    targetRow[column] = value;
+
+    const serializeRow = (cells: string[]) => {
+        return `| ${cells
+            .map(escapeMarkdownTableCell)
+            .join(' | ')} |`;
+    };
+
+    return [
+        serializeRow(nextCells[0]),
+        source.lines[1],
+        ...nextCells.slice(1).map(serializeRow)
+    ].join(source.lineEnding) +
+        source.trailingLineEnding;
+}
 
 function createImageDescription(
     fileName: string
@@ -413,6 +615,497 @@ export function MarkdownDocumentEditor({
         ]
     );
 
+    const activePreviewTableCellRef = useRef<
+        ActivePreviewTableCell | null
+    >(null);
+
+    const finishPreviewTableCellEdit = useCallback(
+        (
+            cell: HTMLTableCellElement,
+            cancel = false
+        ) => {
+            const active =
+                activePreviewTableCellRef.current;
+
+            if (!active || active.element !== cell) {
+                return;
+            }
+
+            activePreviewTableCellRef.current = null;
+            cell.removeAttribute('contenteditable');
+            cell.classList.remove(
+                'editable-preview-table__cell--editing'
+            );
+
+            const nextValue = cancel
+                ? active.originalValue
+                : (cell.innerText || '')
+                    .replace(/\r?\n/g, ' ')
+                    .trim();
+
+            if (
+                cancel ||
+                nextValue === active.originalValue
+            ) {
+                cell.innerHTML = active.originalHtml;
+                return;
+            }
+
+            const replacement = updateMarkdownTableCell(
+                active.source,
+                active.row,
+                active.column,
+                nextValue
+            );
+            const editorView =
+                editorRef.current?.getEditorView();
+
+            if (editorView) {
+                editorView.dispatch({
+                    changes: {
+                        from: active.source.from,
+                        to: active.source.to,
+                        insert: replacement
+                    }
+                });
+            } else {
+                handleChange(
+                    contentRef.current.slice(
+                        0,
+                        active.source.from
+                    ) +
+                    replacement +
+                    contentRef.current.slice(
+                        active.source.to
+                    )
+                );
+            }
+        },
+        [handleChange]
+    );
+
+    const handlePreviewTableClick = useCallback(
+        (event: ReactMouseEvent<HTMLDivElement>) => {
+            if (isReadOnly) {
+                return;
+            }
+
+            const target = event.target;
+
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            const cell = target.closest('th, td');
+            const table = cell?.closest(
+                'table.editable-preview-table'
+            );
+
+            if (
+                !(cell instanceof HTMLTableCellElement) ||
+                !(table instanceof HTMLTableElement)
+            ) {
+                return;
+            }
+
+            if (
+                activePreviewTableCellRef.current
+                    ?.element === cell
+            ) {
+                return;
+            }
+
+            const startLine = Number(
+                table.dataset.line
+            );
+            const endLine = Number(
+                table.dataset.mdTableEnd
+            );
+            const source = getMarkdownTableSource(
+                contentRef.current,
+                startLine,
+                endLine
+            );
+            const rowElement = cell.parentElement;
+
+            if (
+                !source ||
+                !(rowElement instanceof HTMLTableRowElement)
+            ) {
+                return;
+            }
+
+            const row = rowElement.rowIndex;
+            const column = cell.cellIndex;
+            const originalValue =
+                source.cells[row]?.[column] ?? '';
+            const originalHtml = cell.innerHTML;
+
+            event.preventDefault();
+
+            activePreviewTableCellRef.current = {
+                element: cell,
+                source,
+                row,
+                column,
+                originalValue,
+                originalHtml
+            };
+
+            cell.textContent = originalValue;
+            cell.contentEditable = 'true';
+            cell.classList.add(
+                'editable-preview-table__cell--editing'
+            );
+            cell.focus();
+
+            const selection = window.getSelection();
+
+            if (selection) {
+                const range = document.createRange();
+
+                range.selectNodeContents(cell);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }
+        },
+        [isReadOnly]
+    );
+
+    const handlePreviewTableBlur = useCallback(
+        (event: ReactFocusEvent<HTMLDivElement>) => {
+            if (
+                event.target instanceof
+                HTMLTableCellElement
+            ) {
+                finishPreviewTableCellEdit(
+                    event.target
+                );
+            }
+        },
+        [finishPreviewTableCellEdit]
+    );
+
+    const movePreviewTableCaret = useCallback(
+        (
+            currentCell: HTMLTableCellElement,
+            targetRow: number,
+            targetColumn: number,
+            caretOffset: number | 'start' | 'end'
+        ) => {
+            const currentTable = currentCell.closest(
+                'table.editable-preview-table'
+            );
+            const tableStartLine =
+                currentTable?.getAttribute('data-line');
+
+            if (!tableStartLine) {
+                return;
+            }
+
+            finishPreviewTableCellEdit(currentCell);
+
+            window.setTimeout(() => {
+                const editorRoot = document.getElementById(
+                    `markdown-editor-${openedDocument.documentId}`
+                );
+                const refreshedTable =
+                    editorRoot?.querySelector<HTMLTableElement>(
+                        `table.editable-preview-table[data-line="${tableStartLine}"]`
+                    );
+                const refreshedCell =
+                    refreshedTable
+                        ?.rows[targetRow]
+                        ?.cells[targetColumn];
+
+                if (!refreshedCell) {
+                    return;
+                }
+
+                refreshedCell.click();
+
+                const selection = window.getSelection();
+                const textNode = refreshedCell.firstChild;
+
+                if (!selection || !textNode) {
+                    return;
+                }
+
+                const textLength =
+                    textNode.textContent?.length ?? 0;
+                const nextOffset = caretOffset === 'start'
+                    ? 0
+                    : caretOffset === 'end'
+                        ? textLength
+                        : Math.min(caretOffset, textLength);
+                const range = document.createRange();
+
+                range.setStart(textNode, nextOffset);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            }, 140);
+        },
+        [
+            finishPreviewTableCellEdit,
+            openedDocument.documentId
+        ]
+    );
+
+    const handlePreviewTableKeyDown = useCallback(
+        (event: ReactKeyboardEvent<HTMLDivElement>) => {
+            if (
+                (event.ctrlKey || event.metaKey) &&
+                event.key.toLowerCase() === 's'
+            ) {
+                event.preventDefault();
+
+                if (
+                    event.target instanceof
+                    HTMLTableCellElement
+                ) {
+                    finishPreviewTableCellEdit(
+                        event.target
+                    );
+                }
+
+                /*
+                 * 表格修改通过 CodeMirror transaction 写回。
+                 * 下一轮事件循环再保存，确保读取到最新 content。
+                 */
+                window.setTimeout(() => {
+                    void saveCurrentContentRef.current(
+                        contentRef.current,
+                        'manual'
+                    );
+                }, 0);
+
+                return;
+            }
+
+            if (
+                !(event.target instanceof
+                    HTMLTableCellElement) ||
+                event.target.contentEditable !== 'true'
+            ) {
+                return;
+            }
+
+            if (
+                event.key === 'ArrowUp' ||
+                event.key === 'ArrowDown' ||
+                event.key === 'ArrowLeft' ||
+                event.key === 'ArrowRight'
+            ) {
+                const currentCell = event.target;
+                const currentRow = currentCell.parentElement;
+                const currentTable = currentCell.closest(
+                    'table.editable-preview-table'
+                );
+
+                if (
+                    !(currentRow instanceof
+                        HTMLTableRowElement) ||
+                    !(currentTable instanceof
+                        HTMLTableElement)
+                ) {
+                    return;
+                }
+
+                const selection = window.getSelection();
+
+                if (!selection?.isCollapsed) {
+                    return;
+                }
+
+                const caretRange = selection.getRangeAt(0)
+                    .cloneRange();
+
+                caretRange.selectNodeContents(currentCell);
+                caretRange.setEnd(
+                    selection.anchorNode ?? currentCell,
+                    selection.anchorOffset
+                );
+
+                const caretOffset =
+                    caretRange.toString().length;
+                const textLength =
+                    currentCell.innerText.length;
+                const rows = currentTable.rows;
+                let targetRow = currentRow.rowIndex;
+                let targetColumn = currentCell.cellIndex;
+                let targetCaret: number | 'start' | 'end' =
+                    caretOffset;
+
+                if (event.key === 'ArrowUp') {
+                    targetRow -= 1;
+                } else if (event.key === 'ArrowDown') {
+                    targetRow += 1;
+                } else {
+                    const cells = Array.from(
+                        currentTable.querySelectorAll<
+                            HTMLTableCellElement
+                        >('th, td')
+                    );
+                    const currentIndex = cells.indexOf(
+                        currentCell
+                    );
+
+                    if (
+                        event.key === 'ArrowLeft' &&
+                        caretOffset === 0
+                    ) {
+                        const previousCell =
+                            cells[currentIndex - 1];
+
+                        if (!previousCell) {
+                            return;
+                        }
+
+                        targetRow = (
+                            previousCell.parentElement as
+                            HTMLTableRowElement
+                        ).rowIndex;
+                        targetColumn = previousCell.cellIndex;
+                        targetCaret = 'end';
+                    } else if (
+                        event.key === 'ArrowRight' &&
+                        caretOffset === textLength
+                    ) {
+                        const nextCell = cells[currentIndex + 1];
+
+                        if (!nextCell) {
+                            return;
+                        }
+
+                        targetRow = (
+                            nextCell.parentElement as
+                            HTMLTableRowElement
+                        ).rowIndex;
+                        targetColumn = nextCell.cellIndex;
+                        targetCaret = 'start';
+                    } else {
+                        return;
+                    }
+                }
+
+                if (
+                    targetRow < 0 ||
+                    targetRow >= rows.length ||
+                    !rows[targetRow]?.cells[targetColumn]
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+                movePreviewTableCaret(
+                    currentCell,
+                    targetRow,
+                    targetColumn,
+                    targetCaret
+                );
+
+                return;
+            }
+
+            if (event.key === 'Tab') {
+                event.preventDefault();
+
+                const currentCell = event.target;
+                const currentRow = currentCell.parentElement;
+                const currentTable = currentCell.closest(
+                    'table.editable-preview-table'
+                );
+
+                if (
+                    !(currentRow instanceof
+                        HTMLTableRowElement) ||
+                    !(currentTable instanceof
+                        HTMLTableElement)
+                ) {
+                    return;
+                }
+
+                const cells = Array.from(
+                    currentTable.querySelectorAll<
+                        HTMLTableCellElement
+                    >('th, td')
+                );
+                const currentIndex = cells.indexOf(
+                    currentCell
+                );
+                const nextIndex = event.shiftKey
+                    ? currentIndex - 1
+                    : currentIndex + 1;
+                const nextCell = cells[nextIndex];
+                const tableStartLine =
+                    currentTable.dataset.line;
+                const nextRowIndex =
+                    nextCell?.parentElement instanceof
+                    HTMLTableRowElement
+                        ? nextCell.parentElement.rowIndex
+                        : -1;
+                const nextColumnIndex =
+                    nextCell?.cellIndex ?? -1;
+
+                finishPreviewTableCellEdit(
+                    currentCell
+                );
+
+                if (
+                    !tableStartLine ||
+                    nextRowIndex < 0 ||
+                    nextColumnIndex < 0
+                ) {
+                    return;
+                }
+
+                /*
+                 * 预览会在 Markdown 写回后重新渲染，
+                 * 因此要在新表格节点出现后再进入下一格。
+                 */
+                window.setTimeout(() => {
+                    const editorRoot =
+                        document.getElementById(
+                            `markdown-editor-${openedDocument.documentId}`
+                        );
+                    const refreshedTable =
+                        editorRoot?.querySelector<
+                            HTMLTableElement
+                        >(
+                            `table.editable-preview-table[data-line="${tableStartLine}"]`
+                        );
+                    const refreshedCell =
+                        refreshedTable
+                            ?.rows[nextRowIndex]
+                            ?.cells[nextColumnIndex];
+
+                    refreshedCell?.click();
+                }, 140);
+
+                return;
+            }
+
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                event.target.blur();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                finishPreviewTableCellEdit(
+                    event.target,
+                    true
+                );
+                event.target.blur();
+            }
+        },
+        [
+            finishPreviewTableCellEdit,
+            movePreviewTableCaret,
+            openedDocument.documentId
+        ]
+    );
+
     useEffect(() => {
         return () => {
             if (autoSaveTimerRef.current !== null) {
@@ -639,7 +1332,10 @@ export function MarkdownDocumentEditor({
     return (
         <section
             className={
-                `document-editor document-editor--${theme}`
+                `document-editor document-editor--${theme}` +
+                (isReadOnly
+                    ? ' document-editor--readonly'
+                    : '')
             }
         >
             <header className="document-editor__header">
@@ -689,7 +1385,14 @@ export function MarkdownDocumentEditor({
                 </div>
             )}
 
-            <div className="document-editor__main">
+            <div
+                className="document-editor__main"
+                onClick={handlePreviewTableClick}
+                onBlurCapture={handlePreviewTableBlur}
+                onKeyDownCapture={
+                    handlePreviewTableKeyDown
+                }
+            >
                 <MdEditor
                     ref={editorRef}
                     id={
