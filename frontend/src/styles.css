@@ -468,9 +468,21 @@ button:disabled {
 }
 
 .preview-table-context-menu > button {
+    display: flex;
     min-height: 32px;
     padding: 5px 10px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     text-align: left;
+}
+
+.preview-table-context-menu > button kbd {
+    color: #7a7f87;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
 }
 
 .preview-table-context-menu button:hover:not(:disabled),
@@ -548,6 +560,13 @@ button:disabled {
     .preview-table-context-menu
     button:disabled {
     color: #666666;
+}
+
+.document-editor--dark
+    .preview-table-context-menu
+    button
+    kbd {
+    color: #999999;
 }
 
 .document-editor--dark

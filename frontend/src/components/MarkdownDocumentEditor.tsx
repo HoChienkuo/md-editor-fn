@@ -423,6 +423,97 @@ function updateMarkdownTableCell(
     );
 }
 
+function operateMarkdownTable(
+    source: MarkdownTableSource,
+    rowIndex: number,
+    columnIndex: number,
+    operation: PreviewTableOperation
+): string {
+    const cells = source.cells.map((row) => [...row]);
+    const alignments = [...source.alignments];
+    const columnCount = alignments.length;
+    const emptyRow = () =>
+        Array.from({length: columnCount}, () => '');
+
+    switch (operation) {
+        case 'insert-row-above':
+            cells.splice(rowIndex, 0, emptyRow());
+            break;
+
+        case 'insert-row-below':
+            cells.splice(rowIndex + 1, 0, emptyRow());
+            break;
+
+        case 'insert-column-left':
+        case 'insert-column-right': {
+            const offset = operation ===
+            'insert-column-right' ? 1 : 0;
+            const index = columnIndex + offset;
+
+            cells.forEach((row) => row.splice(index, 0, ''));
+            alignments.splice(index, 0, null);
+            break;
+        }
+
+        case 'move-row-up':
+            if (rowIndex > 0) {
+                [cells[rowIndex - 1], cells[rowIndex]] =
+                    [cells[rowIndex], cells[rowIndex - 1]];
+            }
+            break;
+
+        case 'move-row-down':
+            if (rowIndex < cells.length - 1) {
+                [cells[rowIndex], cells[rowIndex + 1]] =
+                    [cells[rowIndex + 1], cells[rowIndex]];
+            }
+            break;
+
+        case 'move-column-left':
+            if (columnIndex > 0) {
+                cells.forEach((row) => {
+                    [row[columnIndex - 1], row[columnIndex]] =
+                        [row[columnIndex], row[columnIndex - 1]];
+                });
+                [alignments[columnIndex - 1], alignments[columnIndex]] =
+                    [alignments[columnIndex], alignments[columnIndex - 1]];
+            }
+            break;
+
+        case 'move-column-right':
+            if (columnIndex < columnCount - 1) {
+                cells.forEach((row) => {
+                    [row[columnIndex], row[columnIndex + 1]] =
+                        [row[columnIndex + 1], row[columnIndex]];
+                });
+                [alignments[columnIndex], alignments[columnIndex + 1]] =
+                    [alignments[columnIndex + 1], alignments[columnIndex]];
+            }
+            break;
+
+        case 'delete-row':
+            if (cells.length > 1) {
+                cells.splice(rowIndex, 1);
+            } else {
+                cells[0] = emptyRow();
+            }
+            break;
+
+        case 'delete-column':
+            if (columnCount > 1) {
+                cells.forEach((row) => row.splice(columnIndex, 1));
+                alignments.splice(columnIndex, 1);
+            }
+            break;
+    }
+
+    return serializeMarkdownTable(
+        source,
+        cells,
+        alignments
+    );
+}
+
 function createImageDescription(
     fileName: string
 ): string {
@@ -898,106 +989,13 @@ export function MarkdownDocumentEditor({
                 return;
             }
 
-            const cells = source.cells.map(
-                (row) => [...row]
-            );
-            const alignments = [...source.alignments];
-            const columnCount = alignments.length;
-            const emptyRow = () =>
-                Array.from({length: columnCount}, () => '');
-
-            switch (operation) {
-                case 'insert-row-above':
-                    cells.splice(menu.row, 0, emptyRow());
-                    break;
-
-                case 'insert-row-below':
-                    cells.splice(menu.row + 1, 0, emptyRow());
-                    break;
-
-                case 'insert-column-left':
-                case 'insert-column-right': {
-                    const offset = operation ===
-                    'insert-column-right' ? 1 : 0;
-                    const index = menu.column + offset;
-
-                    cells.forEach((row) => {
-                        row.splice(index, 0, '');
-                    });
-                    alignments.splice(index, 0, null);
-                    break;
-                }
-
-                case 'move-row-up':
-                    if (menu.row > 0) {
-                        [cells[menu.row - 1], cells[menu.row]] =
-                            [cells[menu.row], cells[menu.row - 1]];
-                    }
-                    break;
-
-                case 'move-row-down':
-                    if (menu.row < cells.length - 1) {
-                        [cells[menu.row], cells[menu.row + 1]] =
-                            [cells[menu.row + 1], cells[menu.row]];
-                    }
-                    break;
-
-                case 'move-column-left':
-                    if (menu.column > 0) {
-                        cells.forEach((row) => {
-                            [row[menu.column - 1], row[menu.column]] =
-                                [row[menu.column], row[menu.column - 1]];
-                        });
-                        [
-                            alignments[menu.column - 1],
-                            alignments[menu.column]
-                        ] = [
-                            alignments[menu.column],
-                            alignments[menu.column - 1]
-                        ];
-                    }
-                    break;
-
-                case 'move-column-right':
-                    if (menu.column < columnCount - 1) {
-                        cells.forEach((row) => {
-                            [row[menu.column], row[menu.column + 1]] =
-                                [row[menu.column + 1], row[menu.column]];
-                        });
-                        [
-                            alignments[menu.column],
-                            alignments[menu.column + 1]
-                        ] = [
-                            alignments[menu.column + 1],
-                            alignments[menu.column]
-                        ];
-                    }
-                    break;
-
-                case 'delete-row':
-                    if (cells.length > 1) {
-                        cells.splice(menu.row, 1);
-                    } else {
-                        cells[0] = emptyRow();
-                    }
-                    break;
-
-                case 'delete-column':
-                    if (columnCount > 1) {
-                        cells.forEach((row) => {
-                            row.splice(menu.column, 1);
-                        });
-                        alignments.splice(menu.column, 1);
-                    }
-                    break;
-            }
-
             replaceMarkdownTable(
                 source,
-                serializeMarkdownTable(
+                operateMarkdownTable(
                     source,
-                    cells,
-                    alignments
+                    menu.row,
+                    menu.column,
+                    operation
                 )
             );
             setPreviewTableContextMenu(null);
@@ -1285,6 +1283,102 @@ export function MarkdownDocumentEditor({
             }
 
             if (
+                event.altKey &&
+                (
+                    event.key === 'ArrowUp' ||
+                    event.key === 'ArrowDown' ||
+                    event.key === 'ArrowLeft' ||
+                    event.key === 'ArrowRight'
+                )
+            ) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const currentCell = event.target;
+                const currentRow = currentCell.parentElement;
+                const currentTable = currentCell.closest(
+                    'table.editable-preview-table'
+                );
+
+                if (
+                    !(currentRow instanceof
+                        HTMLTableRowElement) ||
+                    !(currentTable instanceof
+                        HTMLTableElement)
+                ) {
+                    return;
+                }
+
+                const row = currentRow.rowIndex;
+                const column = currentCell.cellIndex;
+                const operation: PreviewTableOperation =
+                    event.key === 'ArrowUp'
+                        ? 'move-row-up'
+                        : event.key === 'ArrowDown'
+                            ? 'move-row-down'
+                            : event.key === 'ArrowLeft'
+                                ? 'move-column-left'
+                                : 'move-column-right';
+                const targetRow = event.key === 'ArrowUp'
+                    ? row - 1
+                    : event.key === 'ArrowDown'
+                        ? row + 1
+                        : row;
+                const targetColumn = event.key === 'ArrowLeft'
+                    ? column - 1
+                    : event.key === 'ArrowRight'
+                        ? column + 1
+                        : column;
+
+                if (
+                    targetRow < 0 ||
+                    targetRow >= currentTable.rows.length ||
+                    targetColumn < 0 ||
+                    targetColumn >=
+                        currentTable.rows[row].cells.length
+                ) {
+                    return;
+                }
+
+                const startLine = Number(
+                    currentTable.dataset.line
+                );
+                const endLine = Number(
+                    currentTable.dataset.mdTableEnd
+                );
+
+                finishPreviewTableCellEdit(currentCell);
+
+                const source = getMarkdownTableSource(
+                    contentRef.current,
+                    startLine,
+                    endLine
+                );
+
+                if (!source) {
+                    return;
+                }
+
+                replaceMarkdownTable(
+                    source,
+                    operateMarkdownTable(
+                        source,
+                        row,
+                        column,
+                        operation
+                    )
+                );
+                movePreviewTableCaret(
+                    currentCell,
+                    targetRow,
+                    targetColumn,
+                    'end'
+                );
+
+                return;
+            }
+
+            if (
                 event.key === 'ArrowUp' ||
                 event.key === 'ArrowDown' ||
                 event.key === 'ArrowLeft' ||
@@ -1494,7 +1588,8 @@ export function MarkdownDocumentEditor({
         [
             finishPreviewTableCellEdit,
             movePreviewTableCaret,
-            openedDocument.documentId
+            openedDocument.documentId,
+            replaceMarkdownTable
         ]
     );
 
@@ -1932,7 +2027,8 @@ export function MarkdownDocumentEditor({
                             );
                         }}
                     >
-                        上移本行
+                        <span>上移本行</span>
+                        <kbd>Alt+↑</kbd>
                     </button>
                     <button
                         type="button"
@@ -1947,7 +2043,8 @@ export function MarkdownDocumentEditor({
                             );
                         }}
                     >
-                        下移本行
+                        <span>下移本行</span>
+                        <kbd>Alt+↓</kbd>
                     </button>
                     <button
                         type="button"
@@ -1959,7 +2056,8 @@ export function MarkdownDocumentEditor({
                             );
                         }}
                     >
-                        左移本列
+                        <span>左移本列</span>
+                        <kbd>Alt+←</kbd>
                     </button>
                     <button
                         type="button"
@@ -1974,7 +2072,8 @@ export function MarkdownDocumentEditor({
                             );
                         }}
                     >
-                        右移本列
+                        <span>右移本列</span>
+                        <kbd>Alt+→</kbd>
                     </button>
 
                     <div className="preview-table-context-menu__separator" />
