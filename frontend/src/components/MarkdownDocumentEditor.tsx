@@ -112,7 +112,68 @@ type MarkdownTableSource = {
     trailingLineEnding: string;
     lines: string[];
     cells: string[][];
+    alignments: MarkdownTableAlignment[];
 };
+
+type MarkdownTableAlignment =
+    'left' | 'center' | 'right' | null;
+
+type PreviewTableContextMenu = {
+    left: number;
+    top: number;
+    startLine: number;
+    endLine: number;
+    row: number;
+    column: number;
+};
+
+type PreviewTableOperation =
+    | 'insert-row-above'
+    | 'insert-row-below'
+    | 'insert-column-left'
+    | 'insert-column-right'
+    | 'move-row-up'
+    | 'move-row-down'
+    | 'move-column-left'
+    | 'move-column-right'
+    | 'delete-row'
+    | 'delete-column';
+
+function TableAlignmentIcon({
+                                alignment
+                            }: {
+    alignment: Exclude<MarkdownTableAlignment, null>;
+}) {
+    const lineStarts = alignment === 'left'
+        ? [3, 3, 3, 3]
+        : alignment === 'center'
+            ? [3, 5, 3, 6]
+            : [3, 7, 3, 9];
+    const lineEnds = alignment === 'left'
+        ? [17, 13, 17, 11]
+        : alignment === 'center'
+            ? [17, 15, 17, 14]
+            : [17, 17, 17, 17];
+
+    return (
+        <svg
+            viewBox="0 0 20 20"
+            width="18"
+            height="18"
+            aria-hidden="true"
+        >
+            {[4, 8, 12, 16].map((y, index) => (
+                <line
+                    key={y}
+                    x1={lineStarts[index]}
+                    x2={lineEnds[index]}
+                    y1={y}
+                    y2={y}
+                />
+            ))}
+        </svg>
+    );
+}
 
 type ActivePreviewTableCell = {
     element: HTMLTableCellElement;
@@ -241,6 +302,48 @@ function getMarkdownTableSource(
         return null;
     }
 
+    const delimiterCells =
+        splitMarkdownTableRow(lines[1]);
+    const parsedCells = [
+        splitMarkdownTableRow(lines[0]),
+        ...lines.slice(2).map(
+            splitMarkdownTableRow
+        )
+    ];
+    const columnCount = Math.max(
+        delimiterCells.length,
+        ...parsedCells.map((cells) => cells.length)
+    );
+    const cells = parsedCells.map((row) => {
+        return Array.from(
+            {length: columnCount},
+            (_, column) => row[column] ?? ''
+        );
+    });
+    const alignments = Array.from(
+        {length: columnCount},
+        (_, column): MarkdownTableAlignment => {
+            const delimiter =
+                delimiterCells[column]?.trim() ?? '';
+            const left = delimiter.startsWith(':');
+            const right = delimiter.endsWith(':');
+
+            if (left && right) {
+                return 'center';
+            }
+
+            if (left) {
+                return 'left';
+            }
+
+            if (right) {
+                return 'right';
+            }
+
+            return null;
+        }
+    );
+
     return {
         from,
         to,
@@ -249,12 +352,8 @@ function getMarkdownTableSource(
             : '\n',
         trailingLineEnding,
         lines,
-        cells: [
-            splitMarkdownTableRow(lines[0]),
-            ...lines.slice(2).map(
-                splitMarkdownTableRow
-            )
-        ]
+        cells,
+        alignments
     };
 }
 
@@ -265,6 +364,40 @@ function escapeMarkdownTableCell(
         .replace(/\r?\n/g, '<br>')
         .replace(/(^|[^\\])\|/g, '$1\\|')
         .trim();
+}
+
+function serializeMarkdownTable(
+    source: MarkdownTableSource,
+    cells: string[][],
+    alignments = source.alignments
+): string {
+    const serializeRow = (cells: string[]) => {
+        return `| ${cells
+            .map(escapeMarkdownTableCell)
+            .join(' | ')} |`;
+    };
+    const delimiter = alignments.map((alignment) => {
+        switch (alignment) {
+            case 'left':
+                return ':---';
+
+            case 'center':
+                return ':---:';
+
+            case 'right':
+                return '---:';
+
+            default:
+                return '---';
+        }
+    });
+
+    return [
+        serializeRow(cells[0]),
+        serializeRow(delimiter),
+        ...cells.slice(1).map(serializeRow)
+    ].join(source.lineEnding) +
+        source.trailingLineEnding;
 }
 
 function updateMarkdownTableCell(
@@ -282,24 +415,12 @@ function updateMarkdownTableCell(
         return source.lines.join(source.lineEnding);
     }
 
-    while (targetRow.length <= column) {
-        targetRow.push('');
-    }
-
     targetRow[column] = value;
 
-    const serializeRow = (cells: string[]) => {
-        return `| ${cells
-            .map(escapeMarkdownTableCell)
-            .join(' | ')} |`;
-    };
-
-    return [
-        serializeRow(nextCells[0]),
-        source.lines[1],
-        ...nextCells.slice(1).map(serializeRow)
-    ].join(source.lineEnding) +
-        source.trailingLineEnding;
+    return serializeMarkdownTable(
+        source,
+        nextCells
+    );
 }
 
 function createImageDescription(
@@ -618,6 +739,35 @@ export function MarkdownDocumentEditor({
     const activePreviewTableCellRef = useRef<
         ActivePreviewTableCell | null
     >(null);
+    const [previewTableContextMenu, setPreviewTableContextMenu] =
+        useState<PreviewTableContextMenu | null>(null);
+
+    const replaceMarkdownTable = useCallback(
+        (
+            source: MarkdownTableSource,
+            replacement: string
+        ) => {
+            const editorView =
+                editorRef.current?.getEditorView();
+
+            if (editorView) {
+                editorView.dispatch({
+                    changes: {
+                        from: source.from,
+                        to: source.to,
+                        insert: replacement
+                    }
+                });
+            } else {
+                handleChange(
+                    contentRef.current.slice(0, source.from) +
+                    replacement +
+                    contentRef.current.slice(source.to)
+                );
+            }
+        },
+        [handleChange]
+    );
 
     const finishPreviewTableCellEdit = useCallback(
         (
@@ -657,32 +807,274 @@ export function MarkdownDocumentEditor({
                 active.column,
                 nextValue
             );
-            const editorView =
-                editorRef.current?.getEditorView();
+            replaceMarkdownTable(
+                active.source,
+                replacement
+            );
+        },
+        [replaceMarkdownTable]
+    );
 
-            if (editorView) {
-                editorView.dispatch({
-                    changes: {
-                        from: active.source.from,
-                        to: active.source.to,
-                        insert: replacement
-                    }
-                });
-            } else {
-                handleChange(
-                    contentRef.current.slice(
-                        0,
-                        active.source.from
-                    ) +
-                    replacement +
-                    contentRef.current.slice(
-                        active.source.to
-                    )
+    const handlePreviewTableContextMenu = useCallback(
+        (event: ReactMouseEvent<HTMLDivElement>) => {
+            if (isReadOnly) {
+                return;
+            }
+
+            const target = event.target;
+
+            if (!(target instanceof Element)) {
+                return;
+            }
+
+            const cell = target.closest('th, td');
+            const table = cell?.closest(
+                'table.editable-preview-table'
+            );
+            const row = cell?.parentElement;
+
+            if (
+                !(cell instanceof HTMLTableCellElement) ||
+                !(table instanceof HTMLTableElement) ||
+                !(row instanceof HTMLTableRowElement)
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const active =
+                activePreviewTableCellRef.current;
+
+            if (active) {
+                finishPreviewTableCellEdit(
+                    active.element
                 );
             }
+
+            const menuWidth = 224;
+            const menuHeight = 438;
+
+            setPreviewTableContextMenu({
+                left: Math.max(
+                    8,
+                    Math.min(
+                        event.clientX,
+                        window.innerWidth - menuWidth - 8
+                    )
+                ),
+                top: Math.max(
+                    8,
+                    Math.min(
+                        event.clientY,
+                        window.innerHeight - menuHeight - 8
+                    )
+                ),
+                startLine: Number(table.dataset.line),
+                endLine: Number(table.dataset.mdTableEnd),
+                row: row.rowIndex,
+                column: cell.cellIndex
+            });
         },
-        [handleChange]
+        [finishPreviewTableCellEdit, isReadOnly]
     );
+
+    const applyPreviewTableOperation = useCallback(
+        (operation: PreviewTableOperation) => {
+            const menu = previewTableContextMenu;
+
+            if (!menu) {
+                return;
+            }
+
+            const source = getMarkdownTableSource(
+                contentRef.current,
+                menu.startLine,
+                menu.endLine
+            );
+
+            if (!source) {
+                setPreviewTableContextMenu(null);
+                return;
+            }
+
+            const cells = source.cells.map(
+                (row) => [...row]
+            );
+            const alignments = [...source.alignments];
+            const columnCount = alignments.length;
+            const emptyRow = () =>
+                Array.from({length: columnCount}, () => '');
+
+            switch (operation) {
+                case 'insert-row-above':
+                    cells.splice(menu.row, 0, emptyRow());
+                    break;
+
+                case 'insert-row-below':
+                    cells.splice(menu.row + 1, 0, emptyRow());
+                    break;
+
+                case 'insert-column-left':
+                case 'insert-column-right': {
+                    const offset = operation ===
+                    'insert-column-right' ? 1 : 0;
+                    const index = menu.column + offset;
+
+                    cells.forEach((row) => {
+                        row.splice(index, 0, '');
+                    });
+                    alignments.splice(index, 0, null);
+                    break;
+                }
+
+                case 'move-row-up':
+                    if (menu.row > 0) {
+                        [cells[menu.row - 1], cells[menu.row]] =
+                            [cells[menu.row], cells[menu.row - 1]];
+                    }
+                    break;
+
+                case 'move-row-down':
+                    if (menu.row < cells.length - 1) {
+                        [cells[menu.row], cells[menu.row + 1]] =
+                            [cells[menu.row + 1], cells[menu.row]];
+                    }
+                    break;
+
+                case 'move-column-left':
+                    if (menu.column > 0) {
+                        cells.forEach((row) => {
+                            [row[menu.column - 1], row[menu.column]] =
+                                [row[menu.column], row[menu.column - 1]];
+                        });
+                        [
+                            alignments[menu.column - 1],
+                            alignments[menu.column]
+                        ] = [
+                            alignments[menu.column],
+                            alignments[menu.column - 1]
+                        ];
+                    }
+                    break;
+
+                case 'move-column-right':
+                    if (menu.column < columnCount - 1) {
+                        cells.forEach((row) => {
+                            [row[menu.column], row[menu.column + 1]] =
+                                [row[menu.column + 1], row[menu.column]];
+                        });
+                        [
+                            alignments[menu.column],
+                            alignments[menu.column + 1]
+                        ] = [
+                            alignments[menu.column + 1],
+                            alignments[menu.column]
+                        ];
+                    }
+                    break;
+
+                case 'delete-row':
+                    if (cells.length > 1) {
+                        cells.splice(menu.row, 1);
+                    } else {
+                        cells[0] = emptyRow();
+                    }
+                    break;
+
+                case 'delete-column':
+                    if (columnCount > 1) {
+                        cells.forEach((row) => {
+                            row.splice(menu.column, 1);
+                        });
+                        alignments.splice(menu.column, 1);
+                    }
+                    break;
+            }
+
+            replaceMarkdownTable(
+                source,
+                serializeMarkdownTable(
+                    source,
+                    cells,
+                    alignments
+                )
+            );
+            setPreviewTableContextMenu(null);
+        },
+        [previewTableContextMenu, replaceMarkdownTable]
+    );
+
+    const applyPreviewTableAlignment = useCallback(
+        (alignment: Exclude<MarkdownTableAlignment, null>) => {
+            const menu = previewTableContextMenu;
+
+            if (!menu) {
+                return;
+            }
+
+            const source = getMarkdownTableSource(
+                contentRef.current,
+                menu.startLine,
+                menu.endLine
+            );
+
+            if (!source) {
+                setPreviewTableContextMenu(null);
+                return;
+            }
+
+            const alignments = [...source.alignments];
+
+            alignments[menu.column] = alignment;
+            replaceMarkdownTable(
+                source,
+                serializeMarkdownTable(
+                    source,
+                    source.cells,
+                    alignments
+                )
+            );
+            setPreviewTableContextMenu(null);
+        },
+        [previewTableContextMenu, replaceMarkdownTable]
+    );
+
+    useEffect(() => {
+        if (!previewTableContextMenu) {
+            return;
+        }
+
+        const closeMenu = (event: Event) => {
+            if (
+                event.target instanceof Element &&
+                event.target.closest(
+                    '.preview-table-context-menu'
+                )
+            ) {
+                return;
+            }
+
+            setPreviewTableContextMenu(null);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setPreviewTableContextMenu(null);
+            }
+        };
+
+        window.addEventListener('pointerdown', closeMenu);
+        window.addEventListener('resize', closeMenu);
+        window.addEventListener('scroll', closeMenu, true);
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            window.removeEventListener('pointerdown', closeMenu);
+            window.removeEventListener('resize', closeMenu);
+            window.removeEventListener('scroll', closeMenu, true);
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [previewTableContextMenu]);
 
     const handlePreviewTableClick = useCallback(
         (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -1328,6 +1720,19 @@ export function MarkdownDocumentEditor({
     const lineEndingLabel = getLineEndingLabel(
         openedDocument.lineEnding
     );
+    const contextMenuTable = previewTableContextMenu
+        ? getMarkdownTableSource(
+            contentRef.current,
+            previewTableContextMenu.startLine,
+            previewTableContextMenu.endLine
+        )
+        : null;
+    const contextMenuAlignment =
+        previewTableContextMenu && contextMenuTable
+            ? contextMenuTable.alignments[
+                previewTableContextMenu.column
+            ]
+            : null;
 
     return (
         <section
@@ -1392,6 +1797,9 @@ export function MarkdownDocumentEditor({
                 onKeyDownCapture={
                     handlePreviewTableKeyDown
                 }
+                onContextMenu={
+                    handlePreviewTableContextMenu
+                }
             >
                 <MdEditor
                     ref={editorRef}
@@ -1454,6 +1862,207 @@ export function MarkdownDocumentEditor({
                     footers={[]}
                 />
             </div>
+
+            {previewTableContextMenu && contextMenuTable && (
+                <div
+                    className={
+                        'preview-table-context-menu'
+                    }
+                    style={{
+                        left: previewTableContextMenu.left,
+                        top: previewTableContextMenu.top
+                    }}
+                    role="menu"
+                    aria-label="表格操作"
+                >
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'insert-row-above'
+                            );
+                        }}
+                    >
+                        上方插入行
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'insert-row-below'
+                            );
+                        }}
+                    >
+                        下方插入行
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'insert-column-left'
+                            );
+                        }}
+                    >
+                        左边插入列
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'insert-column-right'
+                            );
+                        }}
+                    >
+                        右边插入列
+                    </button>
+
+                    <div className="preview-table-context-menu__separator" />
+
+                    <button
+                        type="button"
+                        role="menuitem"
+                        disabled={previewTableContextMenu.row === 0}
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'move-row-up'
+                            );
+                        }}
+                    >
+                        上移本行
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        disabled={
+                            previewTableContextMenu.row >=
+                            contextMenuTable.cells.length - 1
+                        }
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'move-row-down'
+                            );
+                        }}
+                    >
+                        下移本行
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        disabled={previewTableContextMenu.column === 0}
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'move-column-left'
+                            );
+                        }}
+                    >
+                        左移本列
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        disabled={
+                            previewTableContextMenu.column >=
+                            contextMenuTable.alignments.length - 1
+                        }
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'move-column-right'
+                            );
+                        }}
+                    >
+                        右移本列
+                    </button>
+
+                    <div className="preview-table-context-menu__separator" />
+
+                    <button
+                        type="button"
+                        role="menuitem"
+                        className="preview-table-context-menu__danger"
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'delete-row'
+                            );
+                        }}
+                    >
+                        删除本行
+                    </button>
+                    <button
+                        type="button"
+                        role="menuitem"
+                        className="preview-table-context-menu__danger"
+                        disabled={
+                            contextMenuTable.alignments.length <= 1
+                        }
+                        onClick={() => {
+                            applyPreviewTableOperation(
+                                'delete-column'
+                            );
+                        }}
+                    >
+                        删除本列
+                    </button>
+
+                    <div className="preview-table-context-menu__separator" />
+
+                    <div
+                        className={
+                            'preview-table-context-menu__alignments'
+                        }
+                        aria-label="本列对齐方式"
+                    >
+                        <button
+                            type="button"
+                            title="左对齐本列"
+                            aria-label="左对齐本列"
+                            aria-pressed={
+                                contextMenuAlignment === 'left'
+                            }
+                            onClick={() => {
+                                applyPreviewTableAlignment('left');
+                            }}
+                        >
+                            <TableAlignmentIcon
+                                alignment="left"
+                            />
+                        </button>
+                        <button
+                            type="button"
+                            title="居中对齐本列"
+                            aria-label="居中对齐本列"
+                            aria-pressed={
+                                contextMenuAlignment === 'center'
+                            }
+                            onClick={() => {
+                                applyPreviewTableAlignment('center');
+                            }}
+                        >
+                            <TableAlignmentIcon
+                                alignment="center"
+                            />
+                        </button>
+                        <button
+                            type="button"
+                            title="右对齐本列"
+                            aria-label="右对齐本列"
+                            aria-pressed={
+                                contextMenuAlignment === 'right'
+                            }
+                            onClick={() => {
+                                applyPreviewTableAlignment('right');
+                            }}
+                        >
+                            <TableAlignmentIcon
+                                alignment="right"
+                            />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <footer className="document-editor__footer">
                 <span>

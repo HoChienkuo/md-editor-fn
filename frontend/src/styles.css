@@ -394,6 +394,28 @@ button:disabled {
         box-shadow 120ms ease;
 }
 
+.document-editor
+    .md-editor-preview
+    table.editable-preview-table {
+    display: table;
+    width: 100%;
+    max-width: 100%;
+    table-layout: auto;
+}
+
+.document-editor
+    .md-editor-preview
+    table.editable-preview-table
+    > :is(thead, tbody, tfoot)
+    > tr
+    > :is(th, td) {
+    min-width: 96px;
+    height: 40px;
+    padding-block: 7px;
+    padding-inline: 10px;
+    box-sizing: border-box;
+}
+
 .document-editor:not(.document-editor--readonly)
     .md-editor-preview
     table.editable-preview-table
@@ -420,6 +442,130 @@ button:disabled {
     .editable-preview-table__cell--editing {
     background: #252525;
     color: #e6e6e6;
+}
+
+.preview-table-context-menu {
+    position: fixed;
+    z-index: 20000;
+    display: flex;
+    width: 216px;
+    padding: 6px;
+    border: 1px solid #d8dadd;
+    border-radius: 8px;
+    flex-direction: column;
+    background: #ffffff;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.2);
+}
+
+.preview-table-context-menu > button,
+.preview-table-context-menu__alignments > button {
+    border: 0;
+    border-radius: 5px;
+    color: #252a31;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+}
+
+.preview-table-context-menu > button {
+    min-height: 32px;
+    padding: 5px 10px;
+    text-align: left;
+}
+
+.preview-table-context-menu button:hover:not(:disabled),
+.preview-table-context-menu button:focus-visible {
+    background: #eef5ff;
+    outline: none;
+}
+
+.preview-table-context-menu button:disabled {
+    color: #a7abb1;
+    cursor: not-allowed;
+}
+
+.preview-table-context-menu__separator {
+    height: 1px;
+    margin: 5px 4px;
+    background: #e5e7eb;
+}
+
+.preview-table-context-menu
+    > button.preview-table-context-menu__danger {
+    color: #c62828;
+}
+
+.preview-table-context-menu__alignments {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+
+.preview-table-context-menu__alignments > button {
+    display: flex;
+    min-height: 34px;
+    padding: 4px 6px;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+
+.preview-table-context-menu__alignments svg {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+}
+
+.preview-table-context-menu__alignments
+    > button[aria-pressed='true'] {
+    color: #0958d9;
+    background: #e6f4ff;
+}
+
+.document-editor--dark .preview-table-context-menu {
+    border-color: #454545;
+    background: #252525;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.document-editor--dark
+    .preview-table-context-menu
+    button {
+    color: #dedede;
+}
+
+.document-editor--dark
+    .preview-table-context-menu
+    button:hover:not(:disabled),
+.document-editor--dark
+    .preview-table-context-menu
+    button:focus-visible {
+    background: #353f4f;
+}
+
+.document-editor--dark
+    .preview-table-context-menu
+    button:disabled {
+    color: #666666;
+}
+
+.document-editor--dark
+    .preview-table-context-menu__separator {
+    background: #454545;
+}
+
+.document-editor--dark
+    .preview-table-context-menu
+    > button.preview-table-context-menu__danger {
+    color: #ff7875;
+}
+
+.document-editor--dark
+    .preview-table-context-menu__alignments
+    > button[aria-pressed='true'] {
+    color: #91caff;
+    background: #17345c;
 }
 
 @media (pointer: coarse) {
