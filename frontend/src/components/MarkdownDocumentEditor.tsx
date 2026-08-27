@@ -666,6 +666,12 @@ export function MarkdownDocumentEditor({
     const isMobileLayout =
         useMobileLayout();
 
+    const visibleEditorToolbars = isMobileLayout
+        ? editorToolbars.filter(
+            (toolbar) => toolbar !== 'preview'
+        )
+        : editorToolbars;
+
     useUnsavedChanges(hasUnsavedChanges);
 
     useEffect(() => {
@@ -1926,11 +1932,6 @@ export function MarkdownDocumentEditor({
                         `markdown-editor-${openedDocument.documentId}`
                     }
                     preview={!isMobileLayout}
-                    inputBoxWidth={
-                        isMobileLayout
-                            ? '100%'
-                            : '50%'
-                    }
                     value={content}
                     onChange={handleChange}
                     onSave={handleSave}
@@ -1942,7 +1943,7 @@ export function MarkdownDocumentEditor({
                     theme={theme}
                     language={getEditorLanguage()}
                     readOnly={isReadOnly}
-                    toolbars={editorToolbars}
+                    toolbars={visibleEditorToolbars}
                     defToolbars={[
                         <Mark
                             key="mark"

@@ -4,7 +4,7 @@ import {
 } from 'react';
 
 const mobileMediaQuery =
-    '(max-width: 720px), (pointer: coarse)';
+    '(max-width: 720px)';
 
 function getMobileLayout(): boolean {
     return window
