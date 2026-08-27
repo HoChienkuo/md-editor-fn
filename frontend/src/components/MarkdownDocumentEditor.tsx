@@ -915,6 +915,69 @@ export function MarkdownDocumentEditor({
         [replaceMarkdownTable]
     );
 
+    useEffect(() => {
+        const handleSaveShortcut = (
+            event: KeyboardEvent
+        ) => {
+            if (
+                !(event.ctrlKey || event.metaKey) ||
+                event.key.toLowerCase() !== 's'
+            ) {
+                return;
+            }
+
+            /*
+             * 当前页面完整接管保存快捷键，避免浏览器弹出
+             * “网页另存为”，也避免 MdEditor 和预览区重复保存。
+             */
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (event.repeat) {
+                return;
+            }
+
+            const activeCell =
+                activePreviewTableCellRef.current?.element;
+
+            if (activeCell) {
+                finishPreviewTableCellEdit(activeCell);
+
+                /*
+                 * 表格修改通过 CodeMirror transaction 写回。
+                 * 下一轮事件循环再读取并保存最新内容。
+                 */
+                window.setTimeout(() => {
+                    void saveCurrentContentRef.current(
+                        contentRef.current,
+                        'manual'
+                    );
+                }, 0);
+
+                return;
+            }
+
+            void saveCurrentContentRef.current(
+                contentRef.current,
+                'manual'
+            );
+        };
+
+        window.addEventListener(
+            'keydown',
+            handleSaveShortcut,
+            true
+        );
+
+        return () => {
+            window.removeEventListener(
+                'keydown',
+                handleSaveShortcut,
+                true
+            );
+        };
+    }, [finishPreviewTableCellEdit]);
+
     const handlePreviewTableContextMenu = useCallback(
         (event: ReactMouseEvent<HTMLDivElement>) => {
             if (isReadOnly) {
@@ -1275,35 +1338,6 @@ export function MarkdownDocumentEditor({
 
     const handlePreviewTableKeyDown = useCallback(
         (event: ReactKeyboardEvent<HTMLDivElement>) => {
-            if (
-                (event.ctrlKey || event.metaKey) &&
-                event.key.toLowerCase() === 's'
-            ) {
-                event.preventDefault();
-
-                if (
-                    event.target instanceof
-                    HTMLTableCellElement
-                ) {
-                    finishPreviewTableCellEdit(
-                        event.target
-                    );
-                }
-
-                /*
-                 * 表格修改通过 CodeMirror transaction 写回。
-                 * 下一轮事件循环再保存，确保读取到最新 content。
-                 */
-                window.setTimeout(() => {
-                    void saveCurrentContentRef.current(
-                        contentRef.current,
-                        'manual'
-                    );
-                }, 0);
-
-                return;
-            }
-
             if (
                 !(event.target instanceof
                     HTMLTableCellElement) ||
