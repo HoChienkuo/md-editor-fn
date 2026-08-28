@@ -1,5 +1,12 @@
 import {TableCellEditor} from './TableCellEditor';
 import type {PreviewTableCellEditorState} from './use-preview-table';
+import type {PreviewTableToolbarState} from './use-preview-table';
+import {TableToolbar} from './TableToolbar';
+import type {MarkdownFormatCommand} from './markdown-format';
+import type {
+    MarkdownTableAlignment,
+    PreviewTableOperation
+} from './types';
 
 type PreviewTableLayerProps = {
     editor: PreviewTableCellEditorState | null;
@@ -8,6 +15,15 @@ type PreviewTableLayerProps = {
     onCancel: () => void;
     onTab: (backwards: boolean) => void;
     onContextMenu: (clientX: number, clientY: number) => void;
+    onSelectionChange: (start: number, end: number) => void;
+    onFormat: (command: MarkdownFormatCommand) => void;
+    toolbar: PreviewTableToolbarState | null;
+    onToolbarOperation: (operation: PreviewTableOperation) => void;
+    onToolbarAlignment: (
+        alignment: Exclude<MarkdownTableAlignment, null>
+    ) => void;
+    onToolbarPointerEnter: () => void;
+    onToolbarPointerLeave: () => void;
 };
 
 export function PreviewTableLayer({
@@ -16,16 +32,41 @@ export function PreviewTableLayer({
     onCommit,
     onCancel,
     onTab,
-    onContextMenu
+    onContextMenu,
+    onSelectionChange,
+    onFormat,
+    toolbar,
+    onToolbarOperation,
+    onToolbarAlignment,
+    onToolbarPointerEnter,
+    onToolbarPointerLeave
 }: PreviewTableLayerProps) {
-    return editor ? (
-        <TableCellEditor
-            editor={editor}
-            onChange={onChange}
-            onCommit={onCommit}
-            onCancel={onCancel}
-            onTab={onTab}
-            onContextMenu={onContextMenu}
-        />
-    ) : null;
+    return (
+        <>
+            {editor && (
+                <TableCellEditor
+                    editor={editor}
+                    onChange={onChange}
+                    onCommit={onCommit}
+                    onCancel={onCancel}
+                    onTab={onTab}
+                    onContextMenu={onContextMenu}
+                    onSelectionChange={onSelectionChange}
+                    onFormat={onFormat}
+                />
+            )}
+
+            {toolbar && (
+                <TableToolbar
+                    toolbar={toolbar}
+                    canFormat={editor !== null}
+                    onFormat={onFormat}
+                    onOperation={onToolbarOperation}
+                    onAlignment={onToolbarAlignment}
+                    onPointerEnter={onToolbarPointerEnter}
+                    onPointerLeave={onToolbarPointerLeave}
+                />
+            )}
+        </>
+    );
 }

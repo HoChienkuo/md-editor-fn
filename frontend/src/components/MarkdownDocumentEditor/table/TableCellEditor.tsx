@@ -2,12 +2,8 @@ import {useLayoutEffect, useRef} from 'react';
 import type {ClipboardEvent, KeyboardEvent} from 'react';
 
 import type {PreviewTableCellEditorState} from './use-preview-table';
-import {
-    applyMarkdownFormat
-} from './markdown-format';
 import type {
-    MarkdownFormatCommand,
-    MarkdownFormatResult
+    MarkdownFormatCommand
 } from './markdown-format';
 
 type TableCellEditorProps = {
@@ -17,6 +13,8 @@ type TableCellEditorProps = {
     onCancel: () => void;
     onTab: (backwards: boolean) => void;
     onContextMenu: (clientX: number, clientY: number) => void;
+    onSelectionChange: (start: number, end: number) => void;
+    onFormat: (command: MarkdownFormatCommand) => void;
 };
 
 function escapeLinkLabel(value: string): string {
@@ -79,7 +77,9 @@ export function TableCellEditor({
     onCommit,
     onCancel,
     onTab,
-    onContextMenu
+    onContextMenu,
+    onSelectionChange,
+    onFormat
 }: TableCellEditorProps) {
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -97,16 +97,12 @@ export function TableCellEditor({
         );
     }, [editor.element]);
 
-    const applyResult = (result: MarkdownFormatResult) => {
-        onChange(result.value);
-
-        window.requestAnimationFrame(() => {
-            textareaRef.current?.setSelectionRange(
-                result.selectionStart,
-                result.selectionEnd
-            );
-        });
-    };
+    useLayoutEffect(() => {
+        textareaRef.current?.setSelectionRange(
+            editor.selectionStart,
+            editor.selectionEnd
+        );
+    }, [editor.selectionRevision]);
 
     const getFormatCommand = (
         event: KeyboardEvent<HTMLTextAreaElement>
@@ -146,13 +142,7 @@ export function TableCellEditor({
         if (command) {
             event.preventDefault();
             event.stopPropagation();
-            const textarea = event.currentTarget;
-            applyResult(applyMarkdownFormat(
-                editor.value,
-                textarea.selectionStart,
-                textarea.selectionEnd,
-                command
-            ));
+            onFormat(command);
         } else if (event.key === 'Enter') {
             event.preventDefault();
             onCommit();
@@ -179,13 +169,18 @@ export function TableCellEditor({
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const nextPosition = start + markdownLink.length;
-        applyResult({
-            value:
-                editor.value.slice(0, start) +
-                markdownLink +
-                editor.value.slice(end),
-            selectionStart: nextPosition,
-            selectionEnd: nextPosition
+        onChange(
+            editor.value.slice(0, start) +
+            markdownLink +
+            editor.value.slice(end)
+        );
+
+        window.requestAnimationFrame(() => {
+            textareaRef.current?.setSelectionRange(
+                nextPosition,
+                nextPosition
+            );
+            onSelectionChange(nextPosition, nextPosition);
         });
     };
 
@@ -204,6 +199,12 @@ export function TableCellEditor({
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onSelect={(event) => {
+                onSelectionChange(
+                    event.currentTarget.selectionStart,
+                    event.currentTarget.selectionEnd
+                );
+            }}
             onBlur={onCommit}
             onContextMenu={(event) => {
                 event.preventDefault();

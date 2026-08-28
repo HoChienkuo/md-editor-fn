@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import type {
     Dispatch,
     MouseEvent as ReactMouseEvent,
+    PointerEvent as ReactPointerEvent,
     RefObject,
     SetStateAction
 } from 'react';
@@ -20,6 +21,8 @@ import type {
     PreviewTableOperation
 } from './types';
 import type {PreviewTableContextMenu} from './TableContextMenu';
+import {applyMarkdownFormat} from './markdown-format';
+import type {MarkdownFormatCommand} from './markdown-format';
 
 export type PreviewTableCellEditorState = {
     element: HTMLTableCellElement;
@@ -34,6 +37,22 @@ export type PreviewTableCellEditorState = {
     left: number;
     width: number;
     height: number;
+    selectionStart: number;
+    selectionEnd: number;
+    selectionRevision: number;
+};
+
+export type PreviewTableToolbarState = {
+    table: HTMLTableElement;
+    startLine: number;
+    endLine: number;
+    row: number;
+    column: number;
+    top: number;
+    left: number;
+    alignment: MarkdownTableAlignment;
+    columnCount: number;
+    rowCount: number;
 };
 
 type StringRef = {current: string};
@@ -58,6 +77,18 @@ function getCellPosition(cell: HTMLTableCellElement) {
     };
 }
 
+function getToolbarPosition(table: HTMLTableElement) {
+    const rect = table.getBoundingClientRect();
+
+    return {
+        top: Math.max(8, rect.top - 42),
+        left: Math.max(
+            8,
+            Math.min(rect.left, window.innerWidth - 560)
+        )
+    };
+}
+
 export function usePreviewTable({
     editorRef,
     documentId,
@@ -72,6 +103,9 @@ export function usePreviewTable({
         useState<PreviewTableCellEditorState | null>(null);
     const [contextMenu, setContextMenu] =
         useState<PreviewTableContextMenu | null>(null);
+    const [toolbar, setToolbar] =
+        useState<PreviewTableToolbarState | null>(null);
+    const toolbarLeaveTimerRef = useRef<number | null>(null);
 
     const replaceTable = useCallback((
         source: MarkdownTableSource,
@@ -108,6 +142,9 @@ export function usePreviewTable({
 
         activeCellRef.current = null;
         setCellEditor(null);
+        if (window.matchMedia('(pointer: coarse)').matches) {
+            setToolbar(null);
+        }
         cell.classList.remove(
             'editable-preview-table__cell--editing'
         );
@@ -138,6 +175,47 @@ export function usePreviewTable({
         }
 
         const nextActive = {...active, value};
+        activeCellRef.current = nextActive;
+        setCellEditor(nextActive);
+    }, []);
+
+    const updateCellSelection = useCallback((
+        selectionStart: number,
+        selectionEnd: number
+    ) => {
+        const active = activeCellRef.current;
+
+        if (active) {
+            activeCellRef.current = {
+                ...active,
+                selectionStart,
+                selectionEnd
+            };
+        }
+    }, []);
+
+    const applyCellFormat = useCallback((
+        command: MarkdownFormatCommand
+    ) => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        const result = applyMarkdownFormat(
+            active.value,
+            active.selectionStart,
+            active.selectionEnd,
+            command
+        );
+        const nextActive = {
+            ...active,
+            value: result.value,
+            selectionStart: result.selectionStart,
+            selectionEnd: result.selectionEnd,
+            selectionRevision: active.selectionRevision + 1
+        };
         activeCellRef.current = nextActive;
         setCellEditor(nextActive);
     }, []);
@@ -191,11 +269,25 @@ export function usePreviewTable({
             endLine,
             originalValue,
             value: originalValue,
+            selectionStart: originalValue.length,
+            selectionEnd: originalValue.length,
+            selectionRevision: 0,
             ...getCellPosition(cell)
         };
 
         activeCellRef.current = nextActive;
         setCellEditor(nextActive);
+        setToolbar({
+            table,
+            startLine,
+            endLine,
+            row,
+            column,
+            alignment: source.alignments[column] ?? null,
+            columnCount: source.alignments.length,
+            rowCount: source.cells.length,
+            ...getToolbarPosition(table)
+        });
         cell.classList.add(
             'editable-preview-table__cell--editing'
         );
@@ -240,6 +332,93 @@ export function usePreviewTable({
         event.preventDefault();
         openCellEditor(cell, table);
     }, [isReadOnly, openCellEditor, setMessage]);
+
+    const handlePointerOver = useCallback((
+        event: ReactPointerEvent<HTMLDivElement>
+    ) => {
+        if (isReadOnly || activeCellRef.current) {
+            return;
+        }
+
+        const target = event.target;
+
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const cell = target.closest('th, td');
+        const table = cell?.closest('table.editable-preview-table');
+        const row = cell?.parentElement;
+
+        if (
+            !(cell instanceof HTMLTableCellElement) ||
+            !(table instanceof HTMLTableElement) ||
+            !(row instanceof HTMLTableRowElement)
+        ) {
+            return;
+        }
+
+        if (toolbarLeaveTimerRef.current !== null) {
+            window.clearTimeout(toolbarLeaveTimerRef.current);
+        }
+
+        const source = getMarkdownTableSource(
+            contentRef.current,
+            Number(table.dataset.line),
+            Number(table.dataset.mdTableEnd)
+        );
+
+        if (!source) {
+            return;
+        }
+
+        setToolbar({
+            table,
+            startLine: Number(table.dataset.line),
+            endLine: Number(table.dataset.mdTableEnd),
+            row: row.rowIndex,
+            column: cell.cellIndex,
+            alignment: source.alignments[cell.cellIndex] ?? null,
+            columnCount: source.alignments.length,
+            rowCount: source.cells.length,
+            ...getToolbarPosition(table)
+        });
+    }, [contentRef, isReadOnly]);
+
+    const handlePointerOut = useCallback((
+        event: ReactPointerEvent<HTMLDivElement>
+    ) => {
+        if (activeCellRef.current) {
+            return;
+        }
+
+        const related = event.relatedTarget;
+
+        if (
+            related instanceof Element &&
+            related.closest('table.editable-preview-table')
+        ) {
+            return;
+        }
+
+        toolbarLeaveTimerRef.current = window.setTimeout(() => {
+            if (!activeCellRef.current) {
+                setToolbar(null);
+            }
+        }, 150);
+    }, []);
+
+    const handleToolbarPointerEnter = useCallback(() => {
+        if (toolbarLeaveTimerRef.current !== null) {
+            window.clearTimeout(toolbarLeaveTimerRef.current);
+        }
+    }, []);
+
+    const handleToolbarPointerLeave = useCallback(() => {
+        if (!activeCellRef.current) {
+            setToolbar(null);
+        }
+    }, []);
 
     const moveToAdjacentCell = useCallback((backwards: boolean) => {
         const active = activeCellRef.current;
@@ -326,6 +505,41 @@ export function usePreviewTable({
             window.removeEventListener('scroll', updatePosition, true);
         };
     }, [cellEditor?.element]);
+
+    useEffect(() => {
+        if (!toolbar) {
+            return;
+        }
+
+        const updatePosition = () => {
+            setToolbar((current) => {
+                if (!current || !current.table.isConnected) {
+                    return null;
+                }
+
+                return {
+                    ...current,
+                    ...getToolbarPosition(current.table)
+                };
+            });
+        };
+
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [toolbar?.table]);
+
+    useEffect(() => {
+        return () => {
+            if (toolbarLeaveTimerRef.current !== null) {
+                window.clearTimeout(toolbarLeaveTimerRef.current);
+            }
+        };
+    }, []);
 
     const handleContextMenu = useCallback((
         event: ReactMouseEvent<HTMLDivElement>
@@ -458,6 +672,75 @@ export function usePreviewTable({
         setContextMenu(null);
     }, [contentRef, contextMenu, replaceTable]);
 
+    const applyToolbarOperation = useCallback((
+        operation: PreviewTableOperation
+    ) => {
+        const target = toolbar;
+
+        if (!target) {
+            return;
+        }
+
+        if (activeCellRef.current) {
+            finishCellEdit(activeCellRef.current.element);
+        }
+
+        const source = getMarkdownTableSource(
+            contentRef.current,
+            target.startLine,
+            target.endLine
+        );
+
+        if (!source) {
+            setToolbar(null);
+            return;
+        }
+
+        replaceTable(
+            source,
+            operateMarkdownTable(
+                source,
+                target.row,
+                target.column,
+                operation
+            )
+        );
+        setToolbar(null);
+    }, [contentRef, finishCellEdit, replaceTable, toolbar]);
+
+    const applyToolbarAlignment = useCallback((
+        alignment: Exclude<MarkdownTableAlignment, null>
+    ) => {
+        const target = toolbar;
+
+        if (!target) {
+            return;
+        }
+
+        if (activeCellRef.current) {
+            finishCellEdit(activeCellRef.current.element);
+        }
+
+        const source = getMarkdownTableSource(
+            contentRef.current,
+            target.startLine,
+            target.endLine
+        );
+
+        if (!source) {
+            setToolbar(null);
+            return;
+        }
+
+        const alignments = [...source.alignments];
+        alignments[target.column] = alignment;
+        replaceTable(
+            source,
+            serializeMarkdownTable(source, source.cells, alignments)
+        );
+        setToolbar(null);
+    }, [contentRef, finishCellEdit, replaceTable, toolbar]);
+
     useEffect(() => {
         if (!contextMenu) {
             return;
@@ -506,11 +789,18 @@ export function usePreviewTable({
         activeCellRef,
         cellEditor,
         updateCellValue,
+        updateCellSelection,
+        applyCellFormat,
         finishCellEdit,
         commitCellEdit,
         cancelCellEdit,
         moveToAdjacentCell,
         openActiveContextMenu,
+        toolbar,
+        handleToolbarPointerEnter,
+        handleToolbarPointerLeave,
+        applyToolbarOperation,
+        applyToolbarAlignment,
         contextMenu,
         contextMenuTable,
         contextMenuAlignment,
@@ -518,7 +808,9 @@ export function usePreviewTable({
         applyAlignment,
         handlers: {
             onClick: handleClick,
-            onContextMenu: handleContextMenu
+            onContextMenu: handleContextMenu,
+            onPointerOver: handlePointerOver,
+            onPointerOut: handlePointerOut
         }
     };
 }

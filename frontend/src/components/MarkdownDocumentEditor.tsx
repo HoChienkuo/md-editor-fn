@@ -312,6 +312,23 @@ export function MarkdownDocumentEditor({
                 onContextMenu={
                     previewTable.openActiveContextMenu
                 }
+                onSelectionChange={
+                    previewTable.updateCellSelection
+                }
+                onFormat={previewTable.applyCellFormat}
+                toolbar={previewTable.toolbar}
+                onToolbarOperation={
+                    previewTable.applyToolbarOperation
+                }
+                onToolbarAlignment={
+                    previewTable.applyToolbarAlignment
+                }
+                onToolbarPointerEnter={
+                    previewTable.handleToolbarPointerEnter
+                }
+                onToolbarPointerLeave={
+                    previewTable.handleToolbarPointerLeave
+                }
             />
 
             {previewTable.contextMenu &&
