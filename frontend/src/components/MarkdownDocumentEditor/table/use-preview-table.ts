@@ -58,6 +58,12 @@ export type PreviewTableToolbarState = {
 
 type StringRef = {current: string};
 
+type ScrollPosition = {
+    element: HTMLElement;
+    top: number;
+    left: number;
+};
+
 type UsePreviewTableOptions = {
     editorRef: RefObject<ExposeParam | null>;
     documentId: string;
@@ -90,6 +96,26 @@ function getToolbarPosition(table: HTMLTableElement) {
     };
 }
 
+function captureEditorScrollPositions(editorRoot: HTMLElement) {
+    return Array.from(
+        editorRoot.querySelectorAll<HTMLElement>(
+            '.md-editor-preview-wrapper, .cm-scroller'
+        )
+    ).map<ScrollPosition>((element) => ({
+        element,
+        top: element.scrollTop,
+        left: element.scrollLeft
+    }));
+}
+
+function restoreEditorScrollPositions(positions: ScrollPosition[]) {
+    positions.forEach(({element, top, left}) => {
+        if (element.isConnected) {
+            element.scrollTo({top, left, behavior: 'auto'});
+        }
+    });
+}
+
 export function usePreviewTable({
     editorRef,
     documentId,
@@ -107,6 +133,7 @@ export function usePreviewTable({
     const [toolbar, setToolbar] =
         useState<PreviewTableToolbarState | null>(null);
     const toolbarLeaveTimerRef = useRef<number | null>(null);
+    const historyViewportRevisionRef = useRef(0);
 
     const replaceTable = useCallback((
         source: MarkdownTableSource,
@@ -253,6 +280,21 @@ export function usePreviewTable({
 
     const runDocumentHistory = useCallback((direction: 'undo' | 'redo') => {
         const active = activeCellRef.current;
+        const editorRoot = document.getElementById(
+            `markdown-editor-${documentId}`
+        );
+        const anchorTable = active?.element.closest<HTMLTableElement>(
+            'table.editable-preview-table'
+        ) ?? toolbar?.table ?? null;
+        const anchorStartLine = anchorTable?.dataset.line;
+        const anchorTop = anchorTable?.getBoundingClientRect().top;
+        const scrollPositions = editorRoot
+            ? captureEditorScrollPositions(editorRoot)
+            : [];
+        const windowScrollX = window.scrollX;
+        const windowScrollY = window.scrollY;
+        const revision = historyViewportRevisionRef.current + 1;
+        historyViewportRevisionRef.current = revision;
 
         if (active) {
             finishCellEdit(active.element);
@@ -263,7 +305,45 @@ export function usePreviewTable({
         if (editorView) {
             (direction === 'undo' ? undo : redo)(editorView);
         }
-    }, [editorRef, finishCellEdit]);
+
+        const restoreViewport = () => {
+            if (historyViewportRevisionRef.current !== revision) {
+                return;
+            }
+
+            restoreEditorScrollPositions(scrollPositions);
+            window.scrollTo({
+                left: windowScrollX,
+                top: windowScrollY,
+                behavior: 'auto'
+            });
+
+            if (
+                editorRoot &&
+                anchorStartLine !== undefined &&
+                anchorTop !== undefined
+            ) {
+                const refreshedTable = editorRoot.querySelector<
+                    HTMLTableElement
+                >(
+                    `table.editable-preview-table[data-line="${anchorStartLine}"]`
+                );
+                const previewScroller = refreshedTable?.closest<HTMLElement>(
+                    '.md-editor-preview-wrapper'
+                );
+
+                if (refreshedTable && previewScroller) {
+                    previewScroller.scrollTop +=
+                        refreshedTable.getBoundingClientRect().top -
+                        anchorTop;
+                }
+            }
+        };
+
+        window.requestAnimationFrame(restoreViewport);
+        window.setTimeout(restoreViewport, 120);
+        window.setTimeout(restoreViewport, 240);
+    }, [documentId, editorRef, finishCellEdit, toolbar]);
 
     const commitCellEdit = useCallback(() => {
         const active = activeCellRef.current;
