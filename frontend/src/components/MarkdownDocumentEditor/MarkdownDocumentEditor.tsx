@@ -315,6 +315,7 @@ export function MarkdownDocumentEditor({
                     previewTable.updateCellSelection
                 }
                 onFormat={previewTable.applyCellFormat}
+                onMove={previewTable.moveActiveCell}
                 toolbar={previewTable.toolbar}
                 onToolbarOperation={
                     previewTable.applyToolbarOperation

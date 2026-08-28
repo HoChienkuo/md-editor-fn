@@ -17,6 +17,7 @@ type PreviewTableLayerProps = {
     onContextMenu: (clientX: number, clientY: number) => void;
     onSelectionChange: (start: number, end: number) => void;
     onFormat: (command: MarkdownFormatCommand) => void;
+    onMove: (operation: PreviewTableOperation) => void;
     toolbar: PreviewTableToolbarState | null;
     onToolbarOperation: (operation: PreviewTableOperation) => void;
     onToolbarAlignment: (
@@ -35,6 +36,7 @@ export function PreviewTableLayer({
     onContextMenu,
     onSelectionChange,
     onFormat,
+    onMove,
     toolbar,
     onToolbarOperation,
     onToolbarAlignment,
@@ -53,6 +55,7 @@ export function PreviewTableLayer({
                     onContextMenu={onContextMenu}
                     onSelectionChange={onSelectionChange}
                     onFormat={onFormat}
+                    onMove={onMove}
                 />
             )}
 

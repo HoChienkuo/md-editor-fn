@@ -477,6 +477,86 @@ export function usePreviewTable({
         }, 140);
     }, [documentId, finishCellEdit, openCellEditor]);
 
+    const moveActiveCell = useCallback((
+        operation: PreviewTableOperation
+    ) => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        const isRowMove = operation === 'move-row-up' ||
+            operation === 'move-row-down';
+        const rowOffset = operation === 'move-row-up'
+            ? -1
+            : operation === 'move-row-down'
+                ? 1
+                : 0;
+        const columnOffset = operation === 'move-column-left'
+            ? -1
+            : operation === 'move-column-right'
+                ? 1
+                : 0;
+        const targetRow = active.row + rowOffset;
+        const targetColumn = active.column + columnOffset;
+        const rowCount = active.source.cells.length;
+        const columnCount = active.source.alignments.length;
+
+        if (
+            (!isRowMove && columnOffset === 0) ||
+            targetRow < 0 ||
+            targetRow >= rowCount ||
+            targetColumn < 0 ||
+            targetColumn >= columnCount
+        ) {
+            return;
+        }
+
+        const nextCells = active.source.cells.map((row) => [...row]);
+        nextCells[active.row][active.column] = active.value
+            .replace(/\r?\n/g, ' ')
+            .trim();
+        const sourceWithEditedCell = {
+            ...active.source,
+            cells: nextCells
+        };
+
+        activeCellRef.current = null;
+        setCellEditor(null);
+        setToolbar(null);
+        active.element.classList.remove(
+            'editable-preview-table__cell--editing'
+        );
+        replaceTable(
+            sourceWithEditedCell,
+            operateMarkdownTable(
+                sourceWithEditedCell,
+                active.row,
+                active.column,
+                operation
+            )
+        );
+
+        window.setTimeout(() => {
+            const editorRoot = document.getElementById(
+                `markdown-editor-${documentId}`
+            );
+            const refreshedTable = editorRoot?.querySelector<
+                HTMLTableElement
+            >(
+                `table.editable-preview-table[data-line="${active.startLine}"]`
+            );
+            const refreshedCell = refreshedTable
+                ?.rows[targetRow]
+                ?.cells[targetColumn];
+
+            if (refreshedCell && refreshedTable) {
+                openCellEditor(refreshedCell, refreshedTable);
+            }
+        }, 140);
+    }, [documentId, openCellEditor, replaceTable]);
+
     useEffect(() => {
         if (!cellEditor) {
             return;
@@ -795,6 +875,7 @@ export function usePreviewTable({
         commitCellEdit,
         cancelCellEdit,
         moveToAdjacentCell,
+        moveActiveCell,
         openActiveContextMenu,
         toolbar,
         handleToolbarPointerEnter,

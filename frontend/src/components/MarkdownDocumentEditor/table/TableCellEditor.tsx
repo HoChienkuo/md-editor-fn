@@ -5,6 +5,7 @@ import type {PreviewTableCellEditorState} from './use-preview-table';
 import type {
     MarkdownFormatCommand
 } from './markdown-format';
+import type {PreviewTableOperation} from './types';
 
 type TableCellEditorProps = {
     editor: PreviewTableCellEditorState;
@@ -15,6 +16,7 @@ type TableCellEditorProps = {
     onContextMenu: (clientX: number, clientY: number) => void;
     onSelectionChange: (start: number, end: number) => void;
     onFormat: (command: MarkdownFormatCommand) => void;
+    onMove: (operation: PreviewTableOperation) => void;
 };
 
 function escapeLinkLabel(value: string): string {
@@ -79,7 +81,8 @@ export function TableCellEditor({
     onTab,
     onContextMenu,
     onSelectionChange,
-    onFormat
+    onFormat,
+    onMove
 }: TableCellEditorProps) {
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -138,8 +141,22 @@ export function TableCellEditor({
         }
 
         const command = getFormatCommand(event);
+        const moveOperation: PreviewTableOperation | null =
+            event.altKey && event.key === 'ArrowUp'
+                ? 'move-row-up'
+                : event.altKey && event.key === 'ArrowDown'
+                    ? 'move-row-down'
+                    : event.altKey && event.key === 'ArrowLeft'
+                        ? 'move-column-left'
+                        : event.altKey && event.key === 'ArrowRight'
+                            ? 'move-column-right'
+                            : null;
 
-        if (command) {
+        if (moveOperation) {
+            event.preventDefault();
+            event.stopPropagation();
+            onMove(moveOperation);
+        } else if (command) {
             event.preventDefault();
             event.stopPropagation();
             onFormat(command);
