@@ -62,6 +62,9 @@ import {
 import {
     usePreviewTable
 } from './MarkdownDocumentEditor/table/use-preview-table';
+import {
+    PreviewTableLayer
+} from './MarkdownDocumentEditor/table/PreviewTableLayer';
 
 interface MarkdownDocumentEditorProps {
     openedDocument: OpenedDocument;
@@ -299,6 +302,17 @@ export function MarkdownDocumentEditor({
                     footers={[]}
                 />
             </div>
+
+            <PreviewTableLayer
+                editor={previewTable.cellEditor}
+                onChange={previewTable.updateCellValue}
+                onCommit={previewTable.commitCellEdit}
+                onCancel={previewTable.cancelCellEdit}
+                onTab={previewTable.moveToAdjacentCell}
+                onContextMenu={
+                    previewTable.openActiveContextMenu
+                }
+            />
 
             {previewTable.contextMenu &&
                 previewTable.contextMenuTable && (

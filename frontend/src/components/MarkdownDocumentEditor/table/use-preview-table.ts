@@ -1,25 +1,13 @@
-import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState
-} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import type {
-    ClipboardEvent as ReactClipboardEvent,
     Dispatch,
-    FocusEvent as ReactFocusEvent,
-    KeyboardEvent as ReactKeyboardEvent,
     MouseEvent as ReactMouseEvent,
     RefObject,
     SetStateAction
 } from 'react';
-import type {
-    ExposeParam
-} from 'md-editor-rt';
+import type {ExposeParam} from 'md-editor-rt';
 
-import {
-    openExternalUrl
-} from '../../../services/fnos-sdk';
+import {openExternalUrl} from '../../../services/fnos-sdk';
 import {
     getMarkdownTableSource,
     operateMarkdownTable,
@@ -31,22 +19,24 @@ import type {
     MarkdownTableSource,
     PreviewTableOperation
 } from './types';
-import type {
-    PreviewTableContextMenu
-} from './TableContextMenu';
+import type {PreviewTableContextMenu} from './TableContextMenu';
 
-type ActivePreviewTableCell = {
+export type PreviewTableCellEditorState = {
     element: HTMLTableCellElement;
     source: MarkdownTableSource;
     row: number;
     column: number;
+    startLine: number;
+    endLine: number;
     originalValue: string;
-    originalHtml: string;
+    value: string;
+    top: number;
+    left: number;
+    width: number;
+    height: number;
 };
 
-type StringRef = {
-    current: string;
-};
+type StringRef = {current: string};
 
 type UsePreviewTableOptions = {
     editorRef: RefObject<ExposeParam | null>;
@@ -57,98 +47,15 @@ type UsePreviewTableOptions = {
     setMessage: Dispatch<SetStateAction<string>>;
 };
 
-function escapeMarkdownLinkLabel(value: string): string {
-    return value.replace(/[\\[\]]/g, '\\$&');
-}
+function getCellPosition(cell: HTMLTableCellElement) {
+    const rect = cell.getBoundingClientRect();
 
-function escapeMarkdownLinkDestination(value: string): string {
-    return value
-        .replace(/\r?\n/g, '')
-        .replace(/[\\()]/g, '\\$&');
-}
-
-function convertPastedHtmlLinksToMarkdown(
-    html: string
-): string | null {
-    if (!html) {
-        return null;
-    }
-
-    const fragment = new DOMParser().parseFromString(
-        html,
-        'text/html'
-    );
-
-    if (!fragment.querySelector('a[href]')) {
-        return null;
-    }
-
-    const convertNode = (node: Node): string => {
-        if (node.nodeType === Node.TEXT_NODE) {
-            return node.textContent ?? '';
-        }
-
-        if (!(node instanceof HTMLElement)) {
-            return '';
-        }
-
-        if (node.tagName === 'BR') {
-            return '\n';
-        }
-
-        if (node.tagName === 'A') {
-            const href = node.getAttribute('href')?.trim();
-            const label = node.textContent?.trim() || href;
-
-            if (!href || !label) {
-                return node.textContent ?? '';
-            }
-
-            return '[' + escapeMarkdownLinkLabel(label) + '](' +
-                escapeMarkdownLinkDestination(href) + ')';
-        }
-
-        const content = Array.from(node.childNodes)
-            .map(convertNode)
-            .join('');
-
-        return ['DIV', 'P', 'LI'].includes(node.tagName)
-            ? `${content}\n`
-            : content;
+    return {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height
     };
-
-    return Array.from(fragment.body.childNodes)
-        .map(convertNode)
-        .join('')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-}
-
-function insertTextAtSelection(
-    cell: HTMLTableCellElement,
-    value: string
-): void {
-    const selection = window.getSelection();
-
-    if (!selection || selection.rangeCount === 0) {
-        cell.append(document.createTextNode(value));
-        return;
-    }
-
-    const range = selection.getRangeAt(0);
-
-    if (!cell.contains(range.commonAncestorContainer)) {
-        cell.append(document.createTextNode(value));
-        return;
-    }
-
-    range.deleteContents();
-    const textNode = document.createTextNode(value);
-    range.insertNode(textNode);
-    range.setStartAfter(textNode);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
 }
 
 export function usePreviewTable({
@@ -159,7 +66,10 @@ export function usePreviewTable({
     onContentChange,
     setMessage
 }: UsePreviewTableOptions) {
-    const activeCellRef = useRef<ActivePreviewTableCell | null>(null);
+    const activeCellRef =
+        useRef<PreviewTableCellEditorState | null>(null);
+    const [cellEditor, setCellEditor] =
+        useState<PreviewTableCellEditorState | null>(null);
     const [contextMenu, setContextMenu] =
         useState<PreviewTableContextMenu | null>(null);
 
@@ -197,17 +107,15 @@ export function usePreviewTable({
         }
 
         activeCellRef.current = null;
-        cell.removeAttribute('contenteditable');
+        setCellEditor(null);
         cell.classList.remove(
             'editable-preview-table__cell--editing'
         );
-
-        const nextValue = cancel
-            ? active.originalValue
-            : (cell.innerText || '').replace(/\r?\n/g, ' ').trim();
+        const nextValue = active.value
+            .replace(/\r?\n/g, ' ')
+            .trim();
 
         if (cancel || nextValue === active.originalValue) {
-            cell.innerHTML = active.originalHtml;
             return;
         }
 
@@ -221,6 +129,203 @@ export function usePreviewTable({
             )
         );
     }, [replaceTable]);
+
+    const updateCellValue = useCallback((value: string) => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        const nextActive = {...active, value};
+        activeCellRef.current = nextActive;
+        setCellEditor(nextActive);
+    }, []);
+
+    const commitCellEdit = useCallback(() => {
+        const active = activeCellRef.current;
+
+        if (active) {
+            finishCellEdit(active.element);
+        }
+    }, [finishCellEdit]);
+
+    const cancelCellEdit = useCallback(() => {
+        const active = activeCellRef.current;
+
+        if (active) {
+            finishCellEdit(active.element, true);
+        }
+    }, [finishCellEdit]);
+
+    const openCellEditor = useCallback((
+        cell: HTMLTableCellElement,
+        table: HTMLTableElement
+    ) => {
+        if (activeCellRef.current?.element === cell) {
+            return;
+        }
+
+        const startLine = Number(table.dataset.line);
+        const endLine = Number(table.dataset.mdTableEnd);
+        const source = getMarkdownTableSource(
+            contentRef.current,
+            startLine,
+            endLine
+        );
+        const rowElement = cell.parentElement;
+
+        if (!source || !(rowElement instanceof HTMLTableRowElement)) {
+            return;
+        }
+
+        const row = rowElement.rowIndex;
+        const column = cell.cellIndex;
+        const originalValue = source.cells[row]?.[column] ?? '';
+        const nextActive: PreviewTableCellEditorState = {
+            element: cell,
+            source,
+            row,
+            column,
+            startLine,
+            endLine,
+            originalValue,
+            value: originalValue,
+            ...getCellPosition(cell)
+        };
+
+        activeCellRef.current = nextActive;
+        setCellEditor(nextActive);
+        cell.classList.add(
+            'editable-preview-table__cell--editing'
+        );
+    }, [contentRef]);
+
+    const handleClick = useCallback((
+        event: ReactMouseEvent<HTMLDivElement>
+    ) => {
+        const target = event.target;
+
+        if (!(target instanceof Element)) {
+            return;
+        }
+
+        const externalLink = target.closest<HTMLAnchorElement>(
+            '.md-editor-preview a[href^="http://"], ' +
+            '.md-editor-preview a[href^="https://"]'
+        );
+
+        if (externalLink) {
+            event.preventDefault();
+            void openExternalUrl(externalLink.href).catch(() => {
+                setMessage('无法打开外部链接，请检查浏览器或系统设置');
+            });
+            return;
+        }
+
+        if (isReadOnly) {
+            return;
+        }
+
+        const cell = target.closest('th, td');
+        const table = cell?.closest('table.editable-preview-table');
+
+        if (
+            !(cell instanceof HTMLTableCellElement) ||
+            !(table instanceof HTMLTableElement)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        openCellEditor(cell, table);
+    }, [isReadOnly, openCellEditor, setMessage]);
+
+    const moveToAdjacentCell = useCallback((backwards: boolean) => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        const currentTable = active.element.closest(
+            'table.editable-preview-table'
+        );
+
+        if (!(currentTable instanceof HTMLTableElement)) {
+            finishCellEdit(active.element);
+            return;
+        }
+
+        const cells = Array.from(
+            currentTable.querySelectorAll<HTMLTableCellElement>(
+                'th, td'
+            )
+        );
+        const currentIndex = cells.indexOf(active.element);
+        const nextCell = cells[
+            backwards ? currentIndex - 1 : currentIndex + 1
+        ];
+        const tableStartLine = currentTable.dataset.line;
+        const nextRow = nextCell?.parentElement instanceof
+            HTMLTableRowElement
+            ? nextCell.parentElement.rowIndex
+            : -1;
+        const nextColumn = nextCell?.cellIndex ?? -1;
+
+        finishCellEdit(active.element);
+
+        if (!tableStartLine || nextRow < 0 || nextColumn < 0) {
+            return;
+        }
+
+        window.setTimeout(() => {
+            const editorRoot = document.getElementById(
+                `markdown-editor-${documentId}`
+            );
+            const refreshedTable = editorRoot?.querySelector<
+                HTMLTableElement
+            >(
+                `table.editable-preview-table[data-line="${tableStartLine}"]`
+            );
+            const refreshedCell = refreshedTable
+                ?.rows[nextRow]
+                ?.cells[nextColumn];
+
+            if (refreshedCell && refreshedTable) {
+                openCellEditor(refreshedCell, refreshedTable);
+            }
+        }, 140);
+    }, [documentId, finishCellEdit, openCellEditor]);
+
+    useEffect(() => {
+        if (!cellEditor) {
+            return;
+        }
+
+        const updatePosition = () => {
+            const active = activeCellRef.current;
+
+            if (!active || !active.element.isConnected) {
+                return;
+            }
+
+            const nextActive = {
+                ...active,
+                ...getCellPosition(active.element)
+            };
+            activeCellRef.current = nextActive;
+            setCellEditor(nextActive);
+        };
+
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [cellEditor?.element]);
 
     const handleContextMenu = useCallback((
         event: ReactMouseEvent<HTMLDivElement>
@@ -268,6 +373,33 @@ export function usePreviewTable({
             column: cell.cellIndex
         });
     }, [finishCellEdit, isReadOnly]);
+
+    const openActiveContextMenu = useCallback((
+        clientX: number,
+        clientY: number
+    ) => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        finishCellEdit(active.element);
+        setContextMenu({
+            left: Math.max(
+                8,
+                Math.min(clientX, window.innerWidth - 232)
+            ),
+            top: Math.max(
+                8,
+                Math.min(clientY, window.innerHeight - 446)
+            ),
+            startLine: active.startLine,
+            endLine: active.endLine,
+            row: active.row,
+            column: active.column
+        });
+    }, [finishCellEdit]);
 
     const applyOperation = useCallback((
         operation: PreviewTableOperation
@@ -359,419 +491,6 @@ export function usePreviewTable({
         };
     }, [contextMenu]);
 
-    const handleClick = useCallback((
-        event: ReactMouseEvent<HTMLDivElement>
-    ) => {
-        const target = event.target;
-
-        if (!(target instanceof Element)) {
-            return;
-        }
-
-        const externalLink = target.closest<HTMLAnchorElement>(
-            '.md-editor-preview a[href^="http://"], ' +
-            '.md-editor-preview a[href^="https://"]'
-        );
-
-        if (externalLink) {
-            event.preventDefault();
-            void openExternalUrl(externalLink.href).catch(() => {
-                setMessage('无法打开外部链接，请检查浏览器或系统设置');
-            });
-            return;
-        }
-
-        if (isReadOnly) {
-            return;
-        }
-
-        const cell = target.closest('th, td');
-        const table = cell?.closest('table.editable-preview-table');
-
-        if (
-            !(cell instanceof HTMLTableCellElement) ||
-            !(table instanceof HTMLTableElement) ||
-            activeCellRef.current?.element === cell
-        ) {
-            return;
-        }
-
-        const source = getMarkdownTableSource(
-            contentRef.current,
-            Number(table.dataset.line),
-            Number(table.dataset.mdTableEnd)
-        );
-        const rowElement = cell.parentElement;
-
-        if (!source || !(rowElement instanceof HTMLTableRowElement)) {
-            return;
-        }
-
-        const row = rowElement.rowIndex;
-        const column = cell.cellIndex;
-        const originalValue = source.cells[row]?.[column] ?? '';
-
-        event.preventDefault();
-        activeCellRef.current = {
-            element: cell,
-            source,
-            row,
-            column,
-            originalValue,
-            originalHtml: cell.innerHTML
-        };
-        cell.textContent = originalValue;
-        cell.contentEditable = 'true';
-        cell.classList.add('editable-preview-table__cell--editing');
-        cell.focus();
-
-        const selection = window.getSelection();
-
-        if (selection) {
-            const range = document.createRange();
-            range.selectNodeContents(cell);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }
-    }, [contentRef, isReadOnly, setMessage]);
-
-    const handleBlur = useCallback((
-        event: ReactFocusEvent<HTMLDivElement>
-    ) => {
-        if (event.target instanceof HTMLTableCellElement) {
-            finishCellEdit(event.target);
-        }
-    }, [finishCellEdit]);
-
-    const handlePaste = useCallback((
-        event: ReactClipboardEvent<HTMLDivElement>
-    ) => {
-        const target = event.target;
-
-        if (
-            !(target instanceof HTMLTableCellElement) ||
-            target.contentEditable !== 'true'
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        const markdownLink = convertPastedHtmlLinksToMarkdown(
-            event.clipboardData.getData('text/html')
-        );
-        const value = markdownLink ??
-            event.clipboardData.getData('text/plain');
-
-        if (value) {
-            insertTextAtSelection(target, value);
-        }
-    }, []);
-
-    const moveCaret = useCallback((
-        currentCell: HTMLTableCellElement,
-        targetRow: number,
-        targetColumn: number,
-        caretOffset: number | 'start' | 'end'
-    ) => {
-        const currentTable = currentCell.closest(
-            'table.editable-preview-table'
-        );
-        const tableStartLine = currentTable?.getAttribute('data-line');
-
-        if (!tableStartLine) {
-            return;
-        }
-
-        finishCellEdit(currentCell);
-        window.setTimeout(() => {
-            const editorRoot = document.getElementById(
-                `markdown-editor-${documentId}`
-            );
-            const refreshedTable = editorRoot?.querySelector<
-                HTMLTableElement
-            >(
-                `table.editable-preview-table[data-line="${tableStartLine}"]`
-            );
-            const refreshedCell = refreshedTable
-                ?.rows[targetRow]
-                ?.cells[targetColumn];
-
-            if (!refreshedCell) {
-                return;
-            }
-
-            refreshedCell.click();
-            const selection = window.getSelection();
-            const textNode = refreshedCell.firstChild;
-
-            if (!selection || !textNode) {
-                return;
-            }
-
-            const textLength = textNode.textContent?.length ?? 0;
-            const nextOffset = caretOffset === 'start'
-                ? 0
-                : caretOffset === 'end'
-                    ? textLength
-                    : Math.min(caretOffset, textLength);
-            const range = document.createRange();
-            range.setStart(textNode, nextOffset);
-            range.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(range);
-        }, 140);
-    }, [documentId, finishCellEdit]);
-
-    const handleKeyDown = useCallback((
-        event: ReactKeyboardEvent<HTMLDivElement>
-    ) => {
-        if (
-            !(event.target instanceof HTMLTableCellElement) ||
-            event.target.contentEditable !== 'true'
-        ) {
-            return;
-        }
-
-        const currentCell = event.target;
-        const currentRow = currentCell.parentElement;
-        const currentTable = currentCell.closest(
-            'table.editable-preview-table'
-        );
-
-        if (
-            event.altKey &&
-            ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
-                .includes(event.key)
-        ) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (
-                !(currentRow instanceof HTMLTableRowElement) ||
-                !(currentTable instanceof HTMLTableElement)
-            ) {
-                return;
-            }
-
-            const row = currentRow.rowIndex;
-            const column = currentCell.cellIndex;
-            const operations: Record<string, PreviewTableOperation> = {
-                ArrowUp: 'move-row-up',
-                ArrowDown: 'move-row-down',
-                ArrowLeft: 'move-column-left',
-                ArrowRight: 'move-column-right'
-            };
-            const targetRow = event.key === 'ArrowUp'
-                ? row - 1
-                : event.key === 'ArrowDown'
-                    ? row + 1
-                    : row;
-            const targetColumn = event.key === 'ArrowLeft'
-                ? column - 1
-                : event.key === 'ArrowRight'
-                    ? column + 1
-                    : column;
-
-            if (
-                targetRow < 0 ||
-                targetRow >= currentTable.rows.length ||
-                targetColumn < 0 ||
-                targetColumn >= currentTable.rows[row].cells.length
-            ) {
-                return;
-            }
-
-            const startLine = Number(currentTable.dataset.line);
-            const endLine = Number(currentTable.dataset.mdTableEnd);
-            finishCellEdit(currentCell);
-            const source = getMarkdownTableSource(
-                contentRef.current,
-                startLine,
-                endLine
-            );
-
-            if (!source) {
-                return;
-            }
-
-            replaceTable(
-                source,
-                operateMarkdownTable(
-                    source,
-                    row,
-                    column,
-                    operations[event.key]
-                )
-            );
-            moveCaret(
-                currentCell,
-                targetRow,
-                targetColumn,
-                'end'
-            );
-            return;
-        }
-
-        if (
-            ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
-                .includes(event.key)
-        ) {
-            if (
-                !(currentRow instanceof HTMLTableRowElement) ||
-                !(currentTable instanceof HTMLTableElement)
-            ) {
-                return;
-            }
-
-            const selection = window.getSelection();
-
-            if (!selection?.isCollapsed) {
-                return;
-            }
-
-            const caretRange = selection.getRangeAt(0).cloneRange();
-            caretRange.selectNodeContents(currentCell);
-            caretRange.setEnd(
-                selection.anchorNode ?? currentCell,
-                selection.anchorOffset
-            );
-            const caretOffset = caretRange.toString().length;
-            const textLength = currentCell.innerText.length;
-            const rows = currentTable.rows;
-            let targetRow = currentRow.rowIndex;
-            let targetColumn = currentCell.cellIndex;
-            let targetCaret: number | 'start' | 'end' = caretOffset;
-
-            if (event.key === 'ArrowUp') {
-                targetRow -= 1;
-            } else if (event.key === 'ArrowDown') {
-                targetRow += 1;
-            } else {
-                const cells = Array.from(
-                    currentTable.querySelectorAll<
-                        HTMLTableCellElement
-                    >('th, td')
-                );
-                const currentIndex = cells.indexOf(currentCell);
-
-                if (event.key === 'ArrowLeft' && caretOffset === 0) {
-                    const previousCell = cells[currentIndex - 1];
-
-                    if (!previousCell) {
-                        return;
-                    }
-                    targetRow = (
-                        previousCell.parentElement as HTMLTableRowElement
-                    ).rowIndex;
-                    targetColumn = previousCell.cellIndex;
-                    targetCaret = 'end';
-                } else if (
-                    event.key === 'ArrowRight' &&
-                    caretOffset === textLength
-                ) {
-                    const nextCell = cells[currentIndex + 1];
-
-                    if (!nextCell) {
-                        return;
-                    }
-                    targetRow = (
-                        nextCell.parentElement as HTMLTableRowElement
-                    ).rowIndex;
-                    targetColumn = nextCell.cellIndex;
-                    targetCaret = 'start';
-                } else {
-                    return;
-                }
-            }
-
-            if (
-                targetRow < 0 ||
-                targetRow >= rows.length ||
-                !rows[targetRow]?.cells[targetColumn]
-            ) {
-                return;
-            }
-
-            event.preventDefault();
-            moveCaret(
-                currentCell,
-                targetRow,
-                targetColumn,
-                targetCaret
-            );
-            return;
-        }
-
-        if (event.key === 'Tab') {
-            event.preventDefault();
-
-            if (
-                !(currentRow instanceof HTMLTableRowElement) ||
-                !(currentTable instanceof HTMLTableElement)
-            ) {
-                return;
-            }
-
-            const cells = Array.from(
-                currentTable.querySelectorAll<HTMLTableCellElement>(
-                    'th, td'
-                )
-            );
-            const currentIndex = cells.indexOf(currentCell);
-            const nextCell = cells[
-                event.shiftKey ? currentIndex - 1 : currentIndex + 1
-            ];
-            const tableStartLine = currentTable.dataset.line;
-            const nextRowIndex =
-                nextCell?.parentElement instanceof HTMLTableRowElement
-                    ? nextCell.parentElement.rowIndex
-                    : -1;
-            const nextColumnIndex = nextCell?.cellIndex ?? -1;
-            finishCellEdit(currentCell);
-
-            if (
-                !tableStartLine ||
-                nextRowIndex < 0 ||
-                nextColumnIndex < 0
-            ) {
-                return;
-            }
-
-            window.setTimeout(() => {
-                const editorRoot = document.getElementById(
-                    `markdown-editor-${documentId}`
-                );
-                const refreshedTable = editorRoot?.querySelector<
-                    HTMLTableElement
-                >(
-                    `table.editable-preview-table[data-line="${tableStartLine}"]`
-                );
-                refreshedTable
-                    ?.rows[nextRowIndex]
-                    ?.cells[nextColumnIndex]
-                    ?.click();
-            }, 140);
-            return;
-        }
-
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            currentCell.blur();
-        } else if (event.key === 'Escape') {
-            event.preventDefault();
-            finishCellEdit(currentCell, true);
-            currentCell.blur();
-        }
-    }, [
-        contentRef,
-        documentId,
-        finishCellEdit,
-        moveCaret,
-        replaceTable
-    ]);
-
     const contextMenuTable = contextMenu
         ? getMarkdownTableSource(
             contentRef.current,
@@ -785,17 +504,20 @@ export function usePreviewTable({
 
     return {
         activeCellRef,
+        cellEditor,
+        updateCellValue,
+        finishCellEdit,
+        commitCellEdit,
+        cancelCellEdit,
+        moveToAdjacentCell,
+        openActiveContextMenu,
         contextMenu,
         contextMenuTable,
         contextMenuAlignment,
-        finishCellEdit,
         applyOperation,
         applyAlignment,
         handlers: {
             onClick: handleClick,
-            onBlurCapture: handleBlur,
-            onPasteCapture: handlePaste,
-            onKeyDownCapture: handleKeyDown,
             onContextMenu: handleContextMenu
         }
     };
