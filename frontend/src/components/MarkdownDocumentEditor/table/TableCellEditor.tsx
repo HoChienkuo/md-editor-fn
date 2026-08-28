@@ -2,6 +2,13 @@ import {useLayoutEffect, useRef} from 'react';
 import type {ClipboardEvent, KeyboardEvent} from 'react';
 
 import type {PreviewTableCellEditorState} from './use-preview-table';
+import {
+    applyMarkdownFormat
+} from './markdown-format';
+import type {
+    MarkdownFormatCommand,
+    MarkdownFormatResult
+} from './markdown-format';
 
 type TableCellEditorProps = {
     editor: PreviewTableCellEditorState;
@@ -90,12 +97,63 @@ export function TableCellEditor({
         );
     }, [editor.element]);
 
+    const applyResult = (result: MarkdownFormatResult) => {
+        onChange(result.value);
+
+        window.requestAnimationFrame(() => {
+            textareaRef.current?.setSelectionRange(
+                result.selectionStart,
+                result.selectionEnd
+            );
+        });
+    };
+
+    const getFormatCommand = (
+        event: KeyboardEvent<HTMLTextAreaElement>
+    ): MarkdownFormatCommand | null => {
+        if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+            return null;
+        }
+
+        const key = event.key.toLowerCase();
+
+        if (key === 'b' && !event.shiftKey) {
+            return 'bold';
+        }
+        if (key === 'i' && !event.shiftKey) {
+            return 'italic';
+        }
+        if (key === 'k' && !event.shiftKey) {
+            return 'link';
+        }
+        if (key === 'x' && event.shiftKey) {
+            return 'strikethrough';
+        }
+        if (event.code === 'Backquote') {
+            return 'inline-code';
+        }
+
+        return null;
+    };
+
     const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.nativeEvent.isComposing) {
             return;
         }
 
-        if (event.key === 'Enter') {
+        const command = getFormatCommand(event);
+
+        if (command) {
+            event.preventDefault();
+            event.stopPropagation();
+            const textarea = event.currentTarget;
+            applyResult(applyMarkdownFormat(
+                editor.value,
+                textarea.selectionStart,
+                textarea.selectionEnd,
+                command
+            ));
+        } else if (event.key === 'Enter') {
             event.preventDefault();
             onCommit();
         } else if (event.key === 'Escape') {
@@ -120,18 +178,14 @@ export function TableCellEditor({
         const textarea = event.currentTarget;
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
-        onChange(
-            editor.value.slice(0, start) +
-            markdownLink +
-            editor.value.slice(end)
-        );
-
-        window.requestAnimationFrame(() => {
-            const nextPosition = start + markdownLink.length;
-            textareaRef.current?.setSelectionRange(
-                nextPosition,
-                nextPosition
-            );
+        const nextPosition = start + markdownLink.length;
+        applyResult({
+            value:
+                editor.value.slice(0, start) +
+                markdownLink +
+                editor.value.slice(end),
+            selectionStart: nextPosition,
+            selectionEnd: nextPosition
         });
     };
 
