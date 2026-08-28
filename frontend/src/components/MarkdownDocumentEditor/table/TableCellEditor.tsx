@@ -1,5 +1,6 @@
 import {useLayoutEffect, useRef} from 'react';
 import type {ClipboardEvent, KeyboardEvent} from 'react';
+import {createPortal} from 'react-dom';
 
 import type {PreviewTableCellEditorState} from './use-preview-table';
 import type {
@@ -204,16 +205,10 @@ export function TableCellEditor({
         });
     };
 
-    return (
+    return createPortal(
         <textarea
             ref={textareaRef}
             className="preview-table-cell-editor"
-            style={{
-                top: editor.top,
-                left: editor.left,
-                width: editor.width,
-                height: editor.height
-            }}
             value={editor.value}
             aria-label={`编辑表格第 ${editor.row + 1} 行第 ${editor.column + 1} 列`}
             onChange={(event) => onChange(event.target.value)}
@@ -230,6 +225,7 @@ export function TableCellEditor({
                 event.preventDefault();
                 onContextMenu(event.clientX, event.clientY);
             }}
-        />
+        />,
+        editor.element
     );
 }

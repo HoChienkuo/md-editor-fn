@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import type {PointerEvent} from 'react';
+import {createPortal} from 'react-dom';
 
 import type {MarkdownFormatCommand} from './markdown-format';
 import type {PreviewTableToolbarState} from './use-preview-table';
@@ -78,8 +79,15 @@ export function TableToolbar({
     onPointerLeave
 }: TableToolbarProps) {
     const [emojiOpen, setEmojiOpen] = useState(false);
+    const previewScroller = toolbar.table.closest<HTMLElement>(
+        '.md-editor-preview-wrapper'
+    );
 
-    return (
+    if (!previewScroller) {
+        return null;
+    }
+
+    return createPortal(
         <div
             className="preview-table-toolbar"
             style={{top: toolbar.top, left: toolbar.left}}
@@ -134,6 +142,7 @@ export function TableToolbar({
             <button type="button" title="撤销（Ctrl+Z）" aria-label="撤销" onClick={onUndo}>↶</button>
             <button type="button" title="重做（Ctrl+Y）" aria-label="重做" onClick={onRedo}>↷</button>
             <button type="button" title="保存（Ctrl+S）" aria-label="保存" onClick={onSave}>💾</button>
-        </div>
+        </div>,
+        previewScroller
     );
 }

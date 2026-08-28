@@ -85,13 +85,39 @@ function getCellPosition(cell: HTMLTableCellElement) {
 }
 
 function getToolbarPosition(table: HTMLTableElement) {
+    const previewScroller = table.closest<HTMLElement>(
+        '.md-editor-preview-wrapper'
+    );
     const rect = table.getBoundingClientRect();
 
+    if (!previewScroller) {
+        return {
+            top: rect.top,
+            left: rect.left
+        };
+    }
+
+    const scrollerRect = previewScroller.getBoundingClientRect();
+    const tableTop =
+        rect.top - scrollerRect.top + previewScroller.scrollTop;
+    const tableLeft =
+        rect.left - scrollerRect.left + previewScroller.scrollLeft;
+    const toolbarWidth = Math.min(
+        560,
+        Math.max(0, previewScroller.clientWidth - 16)
+    );
+    const minimumLeft = previewScroller.scrollLeft + 8;
+    const maximumLeft =
+        previewScroller.scrollLeft +
+        previewScroller.clientWidth -
+        toolbarWidth -
+        8;
+
     return {
-        top: Math.max(8, rect.top - 42),
+        top: tableTop - 42,
         left: Math.max(
-            8,
-            Math.min(rect.left, window.innerWidth - 560)
+            minimumLeft,
+            Math.min(tableLeft, maximumLeft)
         )
     };
 }
@@ -683,35 +709,6 @@ export function usePreviewTable({
     }, [documentId, openCellEditor, replaceTable]);
 
     useEffect(() => {
-        if (!cellEditor) {
-            return;
-        }
-
-        const updatePosition = () => {
-            const active = activeCellRef.current;
-
-            if (!active || !active.element.isConnected) {
-                return;
-            }
-
-            const nextActive = {
-                ...active,
-                ...getCellPosition(active.element)
-            };
-            activeCellRef.current = nextActive;
-            setCellEditor(nextActive);
-        };
-
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-
-        return () => {
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-        };
-    }, [cellEditor?.element]);
-
-    useEffect(() => {
         if (!toolbar) {
             return;
         }
@@ -730,11 +727,9 @@ export function usePreviewTable({
         };
 
         window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
 
         return () => {
             window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
         };
     }, [toolbar?.table]);
 

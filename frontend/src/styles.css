@@ -409,6 +409,7 @@ button:disabled {
     > :is(thead, tbody, tfoot)
     > tr
     > :is(th, td) {
+    position: relative;
     min-width: 96px;
     height: 40px;
     padding-block: 7px;
@@ -434,8 +435,11 @@ button:disabled {
 }
 
 .preview-table-cell-editor {
-    position: fixed;
+    position: absolute;
+    inset: 0;
     z-index: 19999;
+    width: 100%;
+    height: 100%;
     min-width: 0;
     min-height: 0;
     margin: 0;
@@ -460,10 +464,10 @@ button:disabled {
 }
 
 .preview-table-toolbar {
-    position: fixed;
+    position: absolute;
     z-index: 19998;
     display: flex;
-    max-width: calc(100vw - 16px);
+    max-width: calc(100% - 16px);
     min-height: 36px;
     padding: 4px;
     border: 1px solid #d8dadd;
