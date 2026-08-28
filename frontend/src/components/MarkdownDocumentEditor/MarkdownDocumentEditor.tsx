@@ -22,54 +22,53 @@ import type {
 } from 'md-editor-rt';
 import type {
     OpenedDocument
-} from '../services/document-api';
+} from '../../services/document-api';
 import {
     useColorTheme
-} from '../hooks/use-color-theme';
+} from '../../hooks/use-color-theme';
 import {
     useUnsavedChanges
-} from '../hooks/use-unsaved-changes';
+} from '../../hooks/use-unsaved-changes';
 import {
     useMobileLayout
-} from '../hooks/use-mobile-layout';
+} from '../../hooks/use-mobile-layout';
 import {
     DocumentEditorHeader
-} from './MarkdownDocumentEditor/DocumentEditorHeader';
+} from './DocumentEditorHeader';
 import {
     DocumentEditorFooter
-} from './MarkdownDocumentEditor/DocumentEditorFooter';
+} from './DocumentEditorFooter';
 import {
     TableContextMenu
-} from './MarkdownDocumentEditor/table/TableContextMenu';
+} from './table/TableContextMenu';
 import {
     useDocumentContent
-} from './MarkdownDocumentEditor/hooks/use-document-content';
+} from './hooks/use-document-content';
 import {
     useDocumentSave
-} from './MarkdownDocumentEditor/hooks/use-document-save';
+} from './hooks/use-document-save';
 import {
     useSaveShortcut
-} from './MarkdownDocumentEditor/hooks/use-save-shortcut';
+} from './hooks/use-save-shortcut';
 import {
     useImageUpload
-} from './MarkdownDocumentEditor/hooks/use-image-upload';
+} from './hooks/use-image-upload';
 import {
     transformInsertedImageUrl
-} from './MarkdownDocumentEditor/image/image-markdown';
+} from './image/image-markdown';
 import {
     getVisibleEditorToolbars
-} from './MarkdownDocumentEditor/editor-toolbars';
+} from './editor-toolbars';
 import {
     usePreviewTable
-} from './MarkdownDocumentEditor/table/use-preview-table';
+} from './table/use-preview-table';
 import {
     PreviewTableLayer
-} from './MarkdownDocumentEditor/table/PreviewTableLayer';
+} from './table/PreviewTableLayer';
 
 interface MarkdownDocumentEditorProps {
     openedDocument: OpenedDocument;
 }
-
 function getEditorLanguage(): 'zh-CN' | 'en-US' {
     const language = navigator.language.toLowerCase();
 
