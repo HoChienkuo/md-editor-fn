@@ -521,6 +521,31 @@ button:disabled {
     background: #e5e7eb;
 }
 
+.preview-table-toolbar__emoji {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.preview-table-toolbar__emoji-menu {
+    position: fixed;
+    z-index: 20001;
+    display: grid;
+    width: 232px;
+    margin-top: 6px;
+    padding: 6px;
+    border: 1px solid #d8dadd;
+    border-radius: 7px;
+    grid-template-columns: repeat(8, 1fr);
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+}
+
+.preview-table-toolbar .preview-table-toolbar__emoji-menu button {
+    min-width: 27px;
+    padding: 2px;
+    font-size: 17px;
+}
+
 .document-editor--dark .preview-table-toolbar {
     border-color: #454545;
     color: #dedede;
@@ -558,6 +583,11 @@ button:disabled {
 
 .document-editor--dark .preview-table-toolbar__separator {
     background: #454545;
+}
+
+.document-editor--dark .preview-table-toolbar__emoji-menu {
+    border-color: #454545;
+    background: #252525;
 }
 
 .preview-table-context-menu {

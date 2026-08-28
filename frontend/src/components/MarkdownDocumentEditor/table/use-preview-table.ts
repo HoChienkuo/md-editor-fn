@@ -7,6 +7,7 @@ import type {
     SetStateAction
 } from 'react';
 import type {ExposeParam} from 'md-editor-rt';
+import {redo, undo} from '@codemirror/commands';
 
 import {openExternalUrl} from '../../../services/fnos-sdk';
 import {
@@ -219,6 +220,50 @@ export function usePreviewTable({
         activeCellRef.current = nextActive;
         setCellEditor(nextActive);
     }, []);
+
+    const insertCellText = useCallback((text: string) => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        const start = Math.min(
+            active.selectionStart,
+            active.selectionEnd
+        );
+        const end = Math.max(
+            active.selectionStart,
+            active.selectionEnd
+        );
+        const nextPosition = start + text.length;
+        const nextActive = {
+            ...active,
+            value:
+                active.value.slice(0, start) +
+                text +
+                active.value.slice(end),
+            selectionStart: nextPosition,
+            selectionEnd: nextPosition,
+            selectionRevision: active.selectionRevision + 1
+        };
+        activeCellRef.current = nextActive;
+        setCellEditor(nextActive);
+    }, []);
+
+    const runDocumentHistory = useCallback((direction: 'undo' | 'redo') => {
+        const active = activeCellRef.current;
+
+        if (active) {
+            finishCellEdit(active.element);
+        }
+
+        const editorView = editorRef.current?.getEditorView();
+
+        if (editorView) {
+            (direction === 'undo' ? undo : redo)(editorView);
+        }
+    }, [editorRef, finishCellEdit]);
 
     const commitCellEdit = useCallback(() => {
         const active = activeCellRef.current;
@@ -752,75 +797,6 @@ export function usePreviewTable({
         setContextMenu(null);
     }, [contentRef, contextMenu, replaceTable]);
 
-    const applyToolbarOperation = useCallback((
-        operation: PreviewTableOperation
-    ) => {
-        const target = toolbar;
-
-        if (!target) {
-            return;
-        }
-
-        if (activeCellRef.current) {
-            finishCellEdit(activeCellRef.current.element);
-        }
-
-        const source = getMarkdownTableSource(
-            contentRef.current,
-            target.startLine,
-            target.endLine
-        );
-
-        if (!source) {
-            setToolbar(null);
-            return;
-        }
-
-        replaceTable(
-            source,
-            operateMarkdownTable(
-                source,
-                target.row,
-                target.column,
-                operation
-            )
-        );
-        setToolbar(null);
-    }, [contentRef, finishCellEdit, replaceTable, toolbar]);
-
-    const applyToolbarAlignment = useCallback((
-        alignment: Exclude<MarkdownTableAlignment, null>
-    ) => {
-        const target = toolbar;
-
-        if (!target) {
-            return;
-        }
-
-        if (activeCellRef.current) {
-            finishCellEdit(activeCellRef.current.element);
-        }
-
-        const source = getMarkdownTableSource(
-            contentRef.current,
-            target.startLine,
-            target.endLine
-        );
-
-        if (!source) {
-            setToolbar(null);
-            return;
-        }
-
-        const alignments = [...source.alignments];
-        alignments[target.column] = alignment;
-        replaceTable(
-            source,
-            serializeMarkdownTable(source, source.cells, alignments)
-        );
-        setToolbar(null);
-    }, [contentRef, finishCellEdit, replaceTable, toolbar]);
-
     useEffect(() => {
         if (!contextMenu) {
             return;
@@ -871,6 +847,9 @@ export function usePreviewTable({
         updateCellValue,
         updateCellSelection,
         applyCellFormat,
+        insertCellText,
+        undoDocument: () => runDocumentHistory('undo'),
+        redoDocument: () => runDocumentHistory('redo'),
         finishCellEdit,
         commitCellEdit,
         cancelCellEdit,
@@ -880,8 +859,6 @@ export function usePreviewTable({
         toolbar,
         handleToolbarPointerEnter,
         handleToolbarPointerLeave,
-        applyToolbarOperation,
-        applyToolbarAlignment,
         contextMenu,
         contextMenuTable,
         contextMenuAlignment,

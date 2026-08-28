@@ -1,9 +1,14 @@
 export type MarkdownFormatCommand =
     | 'bold'
+    | 'underline'
     | 'italic'
     | 'strikethrough'
+    | 'subscript'
+    | 'superscript'
+    | 'mark'
     | 'inline-code'
-    | 'link';
+    | 'link'
+    | 'inline-formula';
 
 export type MarkdownFormatResult = {
     value: string;
@@ -145,15 +150,25 @@ export function applyMarkdownFormat(
     switch (command) {
         case 'bold':
             return toggleWrapper(value, start, end, '**');
+        case 'underline':
+            return toggleWrapper(value, start, end, '<u>', '</u>');
         case 'italic':
             return toggleWrapper(value, start, end, '*');
         case 'strikethrough':
             return toggleWrapper(value, start, end, '~~');
+        case 'subscript':
+            return toggleWrapper(value, start, end, '~');
+        case 'superscript':
+            return toggleWrapper(value, start, end, '^');
+        case 'mark':
+            return toggleWrapper(value, start, end, '==');
         case 'inline-code': {
             const fence = getBacktickFence(value.slice(start, end));
             return toggleWrapper(value, start, end, fence);
         }
         case 'link':
             return applyLink(value, start, end);
+        case 'inline-formula':
+            return toggleWrapper(value, start, end, '$');
     }
 }

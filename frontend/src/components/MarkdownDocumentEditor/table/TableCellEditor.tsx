@@ -122,6 +122,9 @@ export function TableCellEditor({
         if (key === 'i' && !event.shiftKey) {
             return 'italic';
         }
+        if (key === 'u' && !event.shiftKey) {
+            return 'underline';
+        }
         if (key === 'k' && !event.shiftKey) {
             return 'link';
         }

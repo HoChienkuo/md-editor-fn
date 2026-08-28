@@ -195,6 +195,17 @@ export function MarkdownDocumentEditor({
             'manual'
         );
     };
+    const handleTableSave = () => {
+        const activeCell = previewTable.activeCellRef.current;
+
+        if (activeCell) {
+            previewTable.finishCellEdit(activeCell.element);
+        }
+
+        window.setTimeout(() => {
+            void saveCurrentContent(contentRef.current, 'manual');
+        }, 0);
+    };
 
     const documentStatus = isReadOnly
         ? '只读'
@@ -315,14 +326,12 @@ export function MarkdownDocumentEditor({
                     previewTable.updateCellSelection
                 }
                 onFormat={previewTable.applyCellFormat}
+                onInsertText={previewTable.insertCellText}
                 onMove={previewTable.moveActiveCell}
+                onUndo={previewTable.undoDocument}
+                onRedo={previewTable.redoDocument}
+                onSave={handleTableSave}
                 toolbar={previewTable.toolbar}
-                onToolbarOperation={
-                    previewTable.applyToolbarOperation
-                }
-                onToolbarAlignment={
-                    previewTable.applyToolbarAlignment
-                }
                 onToolbarPointerEnter={
                     previewTable.handleToolbarPointerEnter
                 }

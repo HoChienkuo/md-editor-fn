@@ -3,10 +3,7 @@ import type {PreviewTableCellEditorState} from './use-preview-table';
 import type {PreviewTableToolbarState} from './use-preview-table';
 import {TableToolbar} from './TableToolbar';
 import type {MarkdownFormatCommand} from './markdown-format';
-import type {
-    MarkdownTableAlignment,
-    PreviewTableOperation
-} from './types';
+import type {PreviewTableOperation} from './types';
 
 type PreviewTableLayerProps = {
     editor: PreviewTableCellEditorState | null;
@@ -17,12 +14,12 @@ type PreviewTableLayerProps = {
     onContextMenu: (clientX: number, clientY: number) => void;
     onSelectionChange: (start: number, end: number) => void;
     onFormat: (command: MarkdownFormatCommand) => void;
+    onInsertText: (text: string) => void;
     onMove: (operation: PreviewTableOperation) => void;
+    onUndo: () => void;
+    onRedo: () => void;
+    onSave: () => void;
     toolbar: PreviewTableToolbarState | null;
-    onToolbarOperation: (operation: PreviewTableOperation) => void;
-    onToolbarAlignment: (
-        alignment: Exclude<MarkdownTableAlignment, null>
-    ) => void;
     onToolbarPointerEnter: () => void;
     onToolbarPointerLeave: () => void;
 };
@@ -36,10 +33,12 @@ export function PreviewTableLayer({
     onContextMenu,
     onSelectionChange,
     onFormat,
+    onInsertText,
     onMove,
+    onUndo,
+    onRedo,
+    onSave,
     toolbar,
-    onToolbarOperation,
-    onToolbarAlignment,
     onToolbarPointerEnter,
     onToolbarPointerLeave
 }: PreviewTableLayerProps) {
@@ -64,8 +63,10 @@ export function PreviewTableLayer({
                     toolbar={toolbar}
                     canFormat={editor !== null}
                     onFormat={onFormat}
-                    onOperation={onToolbarOperation}
-                    onAlignment={onToolbarAlignment}
+                    onInsertText={onInsertText}
+                    onUndo={onUndo}
+                    onRedo={onRedo}
+                    onSave={onSave}
                     onPointerEnter={onToolbarPointerEnter}
                     onPointerLeave={onToolbarPointerLeave}
                 />
