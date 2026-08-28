@@ -70,6 +70,18 @@ import type {
     MarkdownTableSource,
     PreviewTableOperation
 } from './MarkdownDocumentEditor/table/types';
+import {
+    DocumentEditorHeader
+} from './MarkdownDocumentEditor/DocumentEditorHeader';
+import {
+    DocumentEditorFooter
+} from './MarkdownDocumentEditor/DocumentEditorFooter';
+import {
+    TableContextMenu
+} from './MarkdownDocumentEditor/table/TableContextMenu';
+import type {
+    PreviewTableContextMenu
+} from './MarkdownDocumentEditor/table/TableContextMenu';
 
 const taskToolbarIndex =
     allToolbar.indexOf('task');
@@ -119,51 +131,6 @@ type InsertedImage = {
     alt: string;
     title: string;
 };
-
-type PreviewTableContextMenu = {
-    left: number;
-    top: number;
-    startLine: number;
-    endLine: number;
-    row: number;
-    column: number;
-};
-
-function TableAlignmentIcon({
-                                alignment
-                            }: {
-    alignment: Exclude<MarkdownTableAlignment, null>;
-}) {
-    const lineStarts = alignment === 'left'
-        ? [3, 3, 3, 3]
-        : alignment === 'center'
-            ? [3, 5, 3, 6]
-            : [3, 7, 3, 9];
-    const lineEnds = alignment === 'left'
-        ? [17, 13, 17, 11]
-        : alignment === 'center'
-            ? [17, 15, 17, 14]
-            : [17, 17, 17, 17];
-
-    return (
-        <svg
-            viewBox="0 0 20 20"
-            width="18"
-            height="18"
-            aria-hidden="true"
-        >
-            {[4, 8, 12, 16].map((y, index) => (
-                <line
-                    key={y}
-                    x1={lineStarts[index]}
-                    x2={lineEnds[index]}
-                    y1={y}
-                    y2={y}
-                />
-            ))}
-        </svg>
-    );
-}
 
 type ActivePreviewTableCell = {
     element: HTMLTableCellElement;
@@ -1694,46 +1661,15 @@ export function MarkdownDocumentEditor({
                     : '')
             }
         >
-            <header className="document-editor__header">
-                <div className="document-editor__file">
-                    <strong title={openedDocument.name}>
-                        {openedDocument.name}
-                    </strong>
-
-                    <span
-                        className={
-                            hasUnsavedChanges
-                                ? 'document-editor__status document-editor__status--dirty'
-                                : 'document-editor__status'
-                        }
-                    >
-                        {documentStatus}
-                    </span>
-                </div>
-
-                <div className="document-editor__metadata">
-                    <span>{encodingLabel}</span>
-                    <span>{lineEndingLabel}</span>
-
-                    <span className="document-editor__mobile-state">
-                        {hasUnsavedChanges
-                            ? '内容未保存'
-                            : isReadOnly
-                                ? '只读模式'
-                                : '文件内容未修改'}
-                    </span>
-
-                    <span className="document-editor__mobile-state">
-                        {contentLength.toLocaleString()} 个字符
-                    </span>
-
-                    {isReadOnly && (
-                        <span className="document-editor__readonly">
-                            当前文件没有写入权限
-                        </span>
-                    )}
-                </div>
-            </header>
+            <DocumentEditorHeader
+                fileName={openedDocument.name}
+                documentStatus={documentStatus}
+                hasUnsavedChanges={hasUnsavedChanges}
+                encodingLabel={encodingLabel}
+                lineEndingLabel={lineEndingLabel}
+                contentLength={contentLength}
+                isReadOnly={isReadOnly}
+            />
 
             {saveMessage && (
                 <div className="document-editor__message">
@@ -1811,223 +1747,20 @@ export function MarkdownDocumentEditor({
             </div>
 
             {previewTableContextMenu && contextMenuTable && (
-                <div
-                    className={
-                        'preview-table-context-menu'
-                    }
-                    style={{
-                        left: previewTableContextMenu.left,
-                        top: previewTableContextMenu.top
-                    }}
-                    role="menu"
-                    aria-label="表格操作"
-                >
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'insert-row-above'
-                            );
-                        }}
-                    >
-                        上方插入行
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'insert-row-below'
-                            );
-                        }}
-                    >
-                        下方插入行
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'insert-column-left'
-                            );
-                        }}
-                    >
-                        左边插入列
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'insert-column-right'
-                            );
-                        }}
-                    >
-                        右边插入列
-                    </button>
-
-                    <div className="preview-table-context-menu__separator" />
-
-                    <button
-                        type="button"
-                        role="menuitem"
-                        disabled={previewTableContextMenu.row === 0}
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'move-row-up'
-                            );
-                        }}
-                    >
-                        <span>上移本行</span>
-                        <kbd>Alt+↑</kbd>
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        disabled={
-                            previewTableContextMenu.row >=
-                            contextMenuTable.cells.length - 1
-                        }
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'move-row-down'
-                            );
-                        }}
-                    >
-                        <span>下移本行</span>
-                        <kbd>Alt+↓</kbd>
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        disabled={previewTableContextMenu.column === 0}
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'move-column-left'
-                            );
-                        }}
-                    >
-                        <span>左移本列</span>
-                        <kbd>Alt+←</kbd>
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        disabled={
-                            previewTableContextMenu.column >=
-                            contextMenuTable.alignments.length - 1
-                        }
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'move-column-right'
-                            );
-                        }}
-                    >
-                        <span>右移本列</span>
-                        <kbd>Alt+→</kbd>
-                    </button>
-
-                    <div className="preview-table-context-menu__separator" />
-
-                    <button
-                        type="button"
-                        role="menuitem"
-                        className="preview-table-context-menu__danger"
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'delete-row'
-                            );
-                        }}
-                    >
-                        删除本行
-                    </button>
-                    <button
-                        type="button"
-                        role="menuitem"
-                        className="preview-table-context-menu__danger"
-                        disabled={
-                            contextMenuTable.alignments.length <= 1
-                        }
-                        onClick={() => {
-                            applyPreviewTableOperation(
-                                'delete-column'
-                            );
-                        }}
-                    >
-                        删除本列
-                    </button>
-
-                    <div className="preview-table-context-menu__separator" />
-
-                    <div
-                        className={
-                            'preview-table-context-menu__alignments'
-                        }
-                        aria-label="本列对齐方式"
-                    >
-                        <button
-                            type="button"
-                            title="左对齐本列"
-                            aria-label="左对齐本列"
-                            aria-pressed={
-                                contextMenuAlignment === 'left'
-                            }
-                            onClick={() => {
-                                applyPreviewTableAlignment('left');
-                            }}
-                        >
-                            <TableAlignmentIcon
-                                alignment="left"
-                            />
-                        </button>
-                        <button
-                            type="button"
-                            title="居中对齐本列"
-                            aria-label="居中对齐本列"
-                            aria-pressed={
-                                contextMenuAlignment === 'center'
-                            }
-                            onClick={() => {
-                                applyPreviewTableAlignment('center');
-                            }}
-                        >
-                            <TableAlignmentIcon
-                                alignment="center"
-                            />
-                        </button>
-                        <button
-                            type="button"
-                            title="右对齐本列"
-                            aria-label="右对齐本列"
-                            aria-pressed={
-                                contextMenuAlignment === 'right'
-                            }
-                            onClick={() => {
-                                applyPreviewTableAlignment('right');
-                            }}
-                        >
-                            <TableAlignmentIcon
-                                alignment="right"
-                            />
-                        </button>
-                    </div>
-                </div>
+                <TableContextMenu
+                    menu={previewTableContextMenu}
+                    table={contextMenuTable}
+                    alignment={contextMenuAlignment}
+                    onOperation={applyPreviewTableOperation}
+                    onAlignment={applyPreviewTableAlignment}
+                />
             )}
 
-            <footer className="document-editor__footer">
-                <span>
-                    {hasUnsavedChanges
-                        ? '内容已修改但尚未保存'
-                        : isReadOnly
-                            ? '只读模式'
-                            : '文件内容未修改'}
-                </span>
-
-                <span>
-                    {contentLength.toLocaleString()} 个字符
-                </span>
-            </footer>
+            <DocumentEditorFooter
+                hasUnsavedChanges={hasUnsavedChanges}
+                isReadOnly={isReadOnly}
+                contentLength={contentLength}
+            />
         </section>
     );
 }
