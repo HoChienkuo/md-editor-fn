@@ -144,5 +144,5 @@ md-editor-fn/
 ## 应用信息
 
 - 应用标识：`md-editor-fn`
-- 当前版本：`0.1.23`
+- 当前版本：`0.1.24`
 - 维护者：[HoChienkuo](https://github.com/HoChienkuo)

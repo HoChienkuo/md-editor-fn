@@ -5,6 +5,7 @@ import {
     useState
 } from 'react';
 import type {
+    ClipboardEvent as ReactClipboardEvent,
     FocusEvent as ReactFocusEvent,
     KeyboardEvent as ReactKeyboardEvent,
     MouseEvent as ReactMouseEvent
@@ -186,6 +187,110 @@ type ActivePreviewTableCell = {
     originalValue: string;
     originalHtml: string;
 };
+
+function escapeMarkdownLinkLabel(value: string): string {
+    return value.replace(/[\\[\]]/g, '\\$&');
+}
+
+function escapeMarkdownLinkDestination(
+    value: string
+): string {
+    return value
+        .replace(/\r?\n/g, '')
+        .replace(/[\\()]/g, '\\$&');
+}
+
+function convertPastedHtmlLinksToMarkdown(
+    html: string
+): string | null {
+    if (!html) {
+        return null;
+    }
+
+    const documentFragment = new DOMParser()
+        .parseFromString(html, 'text/html');
+
+    if (!documentFragment.querySelector('a[href]')) {
+        return null;
+    }
+
+    const convertNode = (node: Node): string => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return node.textContent ?? '';
+        }
+
+        if (!(node instanceof HTMLElement)) {
+            return '';
+        }
+
+        if (node.tagName === 'BR') {
+            return '\n';
+        }
+
+        if (node.tagName === 'A') {
+            const href = node.getAttribute('href')?.trim();
+            const label = node.textContent?.trim() || href;
+
+            if (!href || !label) {
+                return node.textContent ?? '';
+            }
+
+            return '[' +
+                escapeMarkdownLinkLabel(label) +
+                '](' +
+                escapeMarkdownLinkDestination(href) +
+                ')';
+        }
+
+        const content = Array.from(node.childNodes)
+            .map(convertNode)
+            .join('');
+
+        if (
+            node.tagName === 'DIV' ||
+            node.tagName === 'P' ||
+            node.tagName === 'LI'
+        ) {
+            return `${content}\n`;
+        }
+
+        return content;
+    };
+
+    return Array.from(documentFragment.body.childNodes)
+        .map(convertNode)
+        .join('')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function insertTextAtSelection(
+    cell: HTMLTableCellElement,
+    value: string
+): void {
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0) {
+        cell.append(document.createTextNode(value));
+        return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    if (!cell.contains(range.commonAncestorContainer)) {
+        cell.append(document.createTextNode(value));
+        return;
+    }
+
+    range.deleteContents();
+
+    const textNode = document.createTextNode(value);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+}
 
 function splitMarkdownTableRow(
     line: string
@@ -1270,6 +1375,37 @@ export function MarkdownDocumentEditor({
         [finishPreviewTableCellEdit]
     );
 
+    const handlePreviewTablePaste = useCallback(
+        (event: ReactClipboardEvent<HTMLDivElement>) => {
+            const target = event.target;
+
+            if (
+                !(target instanceof HTMLTableCellElement) ||
+                target.contentEditable !== 'true'
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const clipboard = event.clipboardData;
+            const markdownLink =
+                convertPastedHtmlLinksToMarkdown(
+                    clipboard.getData('text/html')
+                );
+            const value = markdownLink ??
+                clipboard.getData('text/plain');
+
+            if (!value) {
+                return;
+            }
+
+            insertTextAtSelection(target, value);
+        },
+        []
+    );
+
     const movePreviewTableCaret = useCallback(
         (
             currentCell: HTMLTableCellElement,
@@ -1953,6 +2089,7 @@ export function MarkdownDocumentEditor({
                 className="document-editor__main"
                 onClick={handlePreviewTableClick}
                 onBlurCapture={handlePreviewTableBlur}
+                onPasteCapture={handlePreviewTablePaste}
                 onKeyDownCapture={
                     handlePreviewTableKeyDown
                 }
