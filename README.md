@@ -1,10 +1,10 @@
 # Markdown 编辑器
 
-一款适用于飞牛 fnOS 的 Markdown 文件编辑器，可直接从文件管理器打开并编辑 `.md` 和 `.markdown` 文件。
+一款适用于飞牛 fnOS 的 Markdown 文件编辑器，可直接从文件管理器打开并编辑 `.md`、`.markdown` 和 `.mdown` 文件。
 
 ## 功能特性
 
-- 从飞牛 fnOS 文件管理器直接打开 `.md` 和 `.markdown` 文件
+- 从飞牛 fnOS 文件管理器直接打开 `.md`、`.markdown` 和 `.mdown` 文件
 - Markdown 编辑与实时预览
 - 在预览区直接编辑 Markdown 表格单元格
 - 可在预览区直接切换任务列表状态
@@ -47,7 +47,7 @@
 ## 使用方法
 
 1. 在 fnOS 应用中心手动安装构建好的 FPK 文件。
-2. 在文件管理器中选择 `.md` 或 `.markdown` 文件。
+2. 在文件管理器中选择 `.md`、`.markdown` 或 `.mdown` 文件。
 3. 右键选择“打开方式”，然后选择“Markdown 编辑器”。
 
 建议前往“系统设置 → 应用 → 默认应用”，搜索 `.md`，将本应用设置为默认打开方式。
@@ -129,7 +129,7 @@ md-editor-fn/
 
 ## 文件与图片限制
 
-- 仅支持 `.md` 和 `.markdown` 文件。
+- 仅支持 `.md`、`.markdown` 和 `.mdown` 文件。
 - Markdown 文件必须是有效的 UTF-8 编码。
 - 单个 Markdown 文件最大为 20 MB。
 - 图片支持 PNG、JPEG、GIF 和 WebP 格式。
@@ -150,5 +150,5 @@ md-editor-fn/
 ## 应用信息
 
 - 应用标识：`md-editor-fn`
-- 当前版本：`0.1.28`
+- 当前版本：`0.1.29`
 - 维护者：[HoChienkuo](https://github.com/HoChienkuo)

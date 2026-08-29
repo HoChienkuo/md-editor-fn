@@ -33,8 +33,9 @@ function MissingPathView() {
             </p>
 
             <p className="secondary">
-                请在飞牛文件管理器中选择一个 .md 或
-                .markdown 文件，并使用 Markdown 编辑器打开。
+                请在飞牛文件管理器中选择一个 .md、
+                .markdown 或 .mdown 文件，并使用 Markdown
+                编辑器打开。
             </p>
         </>
     );

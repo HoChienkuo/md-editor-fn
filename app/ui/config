@@ -11,7 +11,8 @@
       "allUsers": true,
       "fileTypes": [
         "md",
-        "markdown"
+        "markdown",
+        "mdown"
       ],
       "noDisplay": true
     }
