@@ -15,7 +15,8 @@ export type LaunchContext =
 
 const supportedExtensions = new Set([
     'md',
-    'markdown'
+    'markdown',
+    'mdown'
 ]);
 
 function getFileName(filePath: string): string {
@@ -103,7 +104,7 @@ export function readLaunchContext(): LaunchContext {
     if (!supportedExtensions.has(extension)) {
         return {
             type: 'invalid-path',
-            reason: '当前入口只支持 .md 和 .markdown 文件'
+            reason: '当前入口只支持 .md、.markdown 和 .mdown 文件'
         };
     }
 

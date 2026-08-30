@@ -42,7 +42,8 @@ const maximumMarkdownSize =
 
 const supportedExtensions = new Set([
     '.md',
-    '.markdown'
+    '.markdown',
+    '.mdown'
 ]);
 
 function validateExtension(
@@ -55,7 +56,7 @@ function validateExtension(
     if (!supportedExtensions.has(extension)) {
         throw new DocumentError(
             'UNSUPPORTED_FILE_TYPE',
-            '只支持 .md 和 .markdown 文件',
+            '只支持 .md、.markdown 和 .mdown 文件',
             415
         );
     }

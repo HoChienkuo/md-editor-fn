@@ -1,6 +1,6 @@
 {
   "name": "@md-editor-fn/frontend",
-  "version": "0.1.24",
+  "version": "0.1.30",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,11 +11,13 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.0",
     "@trimjs/web-app": "^0.4.2",
     "@vavt/rt-extension": "^4.0.0",
     "alova": "^3.5.4",
     "markdown-it-mark": "^4.0.0",
     "md-editor-rt": "^6.5.6",
+    "lucide-react": "^1.31.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
