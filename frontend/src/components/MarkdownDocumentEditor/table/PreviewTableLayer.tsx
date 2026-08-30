@@ -7,7 +7,7 @@ import type {PreviewTableOperation} from './types';
 
 type PreviewTableLayerProps = {
     editor: PreviewTableCellEditorState | null;
-    onChange: (value: string) => void;
+    onChange: (value: string, selectionStart?: number, selectionEnd?: number) => void;
     onCommit: () => void;
     onCancel: () => void;
     onTab: (backwards: boolean) => void;
@@ -18,6 +18,8 @@ type PreviewTableLayerProps = {
     onMove: (operation: PreviewTableOperation) => void;
     onUndo: () => void;
     onRedo: () => void;
+    onCellUndo: () => void;
+    onCellRedo: () => void;
     onSave: () => void;
     toolbar: PreviewTableToolbarState | null;
     onToolbarPointerEnter: () => void;
@@ -37,6 +39,8 @@ export function PreviewTableLayer({
     onMove,
     onUndo,
     onRedo,
+    onCellUndo,
+    onCellRedo,
     onSave,
     toolbar,
     onToolbarPointerEnter,
@@ -55,6 +59,8 @@ export function PreviewTableLayer({
                     onSelectionChange={onSelectionChange}
                     onFormat={onFormat}
                     onMove={onMove}
+                    onUndo={onCellUndo}
+                    onRedo={onCellRedo}
                 />
             )}
 

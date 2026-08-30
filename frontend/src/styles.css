@@ -496,6 +496,13 @@ button:disabled {
     cursor: pointer;
 }
 
+.preview-table-toolbar button > svg {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    stroke-width: 2;
+}
+
 .preview-table-toolbar button:hover:not(:disabled),
 .preview-table-toolbar button:focus-visible {
     outline: none;
@@ -535,17 +542,19 @@ button:disabled {
     z-index: 20001;
     display: grid;
     width: 232px;
-    margin-top: 6px;
+    max-width: none;
     padding: 6px;
     border: 1px solid #d8dadd;
     border-radius: 7px;
     grid-template-columns: repeat(8, 1fr);
+    overflow: visible;
     background: #ffffff;
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
 }
 
-.preview-table-toolbar .preview-table-toolbar__emoji-menu button {
-    min-width: 27px;
+.preview-table-toolbar__emoji-menu button {
+    width: 100%;
+    min-width: 0;
     padding: 2px;
     font-size: 17px;
 }
@@ -589,8 +598,9 @@ button:disabled {
     background: #454545;
 }
 
-.document-editor--dark .preview-table-toolbar__emoji-menu {
+body:has(.document-editor--dark) .preview-table-toolbar__emoji-menu {
     border-color: #454545;
+    color: #dedede;
     background: #252525;
 }
 

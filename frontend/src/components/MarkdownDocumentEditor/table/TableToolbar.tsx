@@ -1,7 +1,25 @@
-import {useState} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import type {PointerEvent} from 'react';
 import {createPortal} from 'react-dom';
+import {
+    Bold,
+    Code,
+    Highlighter,
+    Italic,
+    Link,
+    Redo2,
+    Save,
+    Sigma,
+    Smile,
+    Strikethrough,
+    Subscript,
+    Superscript,
+    Underline,
+    Undo2
+} from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 
+import {emojiOptions} from '../emoji-options';
 import type {MarkdownFormatCommand} from './markdown-format';
 import type {PreviewTableToolbarState} from './use-preview-table';
 
@@ -17,28 +35,21 @@ type TableToolbarProps = {
     onPointerLeave: () => void;
 };
 
-const emojiOptions = [
-    '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
-    '😊', '😉', '😍', '🥰', '🤔', '🫡️', '😎', '🥳',
-    '👍', '👎', '👌', '👏', '🙏', '💪', '❤️', '🔥',
-    '✅', '❌', '⚠️', '🎉', '💡', '📌', '🚀', '👀'
-];
-
 const formatButtons: Array<{
     command: MarkdownFormatCommand;
-    label: string;
+    icon: LucideIcon;
     title: string;
 }> = [
-    {command: 'bold', label: 'B', title: '加粗（Ctrl+B）'},
-    {command: 'underline', label: 'U', title: '下划线（Ctrl+U）'},
-    {command: 'italic', label: 'I', title: '斜体（Ctrl+I）'},
-    {command: 'strikethrough', label: 'S', title: '删除线（Ctrl+Shift+X）'},
-    {command: 'subscript', label: 'X₂', title: '下标'},
-    {command: 'superscript', label: 'X²', title: '上标'},
-    {command: 'mark', label: '==', title: '标注'},
-    {command: 'inline-code', label: '<>', title: '行内代码'},
-    {command: 'link', label: '🔗', title: '链接（Ctrl+K）'},
-    {command: 'inline-formula', label: '∑', title: '行内公式'}
+    {command: 'bold', icon: Bold, title: '加粗（Ctrl+B）'},
+    {command: 'underline', icon: Underline, title: '下划线（Ctrl+U）'},
+    {command: 'italic', icon: Italic, title: '斜体（Ctrl+I）'},
+    {command: 'strikethrough', icon: Strikethrough, title: '删除线（Ctrl+Shift+X）'},
+    {command: 'subscript', icon: Subscript, title: '下标'},
+    {command: 'superscript', icon: Superscript, title: '上标'},
+    {command: 'mark', icon: Highlighter, title: '标注'},
+    {command: 'inline-code', icon: Code, title: '行内代码'},
+    {command: 'link', icon: Link, title: '链接（Ctrl+K）'},
+    {command: 'inline-formula', icon: Sigma, title: '行内公式'}
 ];
 
 function preserveEditorSelection(event: PointerEvent<HTMLDivElement>) {
@@ -53,6 +64,7 @@ function FormatButton({command, disabled, onFormat}: {
     onFormat: (command: MarkdownFormatCommand) => void;
 }) {
     const button = formatButtons.find((item) => item.command === command)!;
+    const Icon = button.icon;
 
     return (
         <button
@@ -62,7 +74,7 @@ function FormatButton({command, disabled, onFormat}: {
             disabled={disabled}
             onClick={() => onFormat(command)}
         >
-            {button.label}
+            <Icon aria-hidden="true" />
         </button>
     );
 }
@@ -79,9 +91,70 @@ export function TableToolbar({
     onPointerLeave
 }: TableToolbarProps) {
     const [emojiOpen, setEmojiOpen] = useState(false);
+    const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
+    const emojiMenuRef = useRef<HTMLDivElement | null>(null);
+    const [emojiMenuPosition, setEmojiMenuPosition] = useState({
+        top: 0,
+        left: 0
+    });
     const previewScroller = toolbar.table.closest<HTMLElement>(
         '.md-editor-preview-wrapper'
     );
+
+    useLayoutEffect(() => {
+        if (!emojiOpen || !emojiButtonRef.current) {
+            return;
+        }
+
+        const buttonRect = emojiButtonRef.current.getBoundingClientRect();
+        const menuWidth = 232;
+        const viewportPadding = 8;
+
+        setEmojiMenuPosition({
+            top: buttonRect.bottom + 6,
+            left: Math.min(
+                Math.max(viewportPadding, buttonRect.left),
+                window.innerWidth - menuWidth - viewportPadding
+            )
+        });
+    }, [emojiOpen]);
+
+    useEffect(() => {
+        if (!emojiOpen) {
+            return;
+        }
+
+        const closeEmojiMenu = (event: Event) => {
+            const target = event.target;
+
+            if (
+                target instanceof Node &&
+                (emojiButtonRef.current?.contains(target) ||
+                    emojiMenuRef.current?.contains(target))
+            ) {
+                return;
+            }
+            setEmojiOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setEmojiOpen(false);
+                emojiButtonRef.current?.focus({preventScroll: true});
+            }
+        };
+
+        window.addEventListener('pointerdown', closeEmojiMenu);
+        window.addEventListener('resize', closeEmojiMenu);
+        window.addEventListener('scroll', closeEmojiMenu, true);
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            window.removeEventListener('pointerdown', closeEmojiMenu);
+            window.removeEventListener('resize', closeEmojiMenu);
+            window.removeEventListener('scroll', closeEmojiMenu, true);
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [emojiOpen]);
 
     if (!previewScroller) {
         return null;
@@ -107,6 +180,7 @@ export function TableToolbar({
             <FormatButton command="mark" disabled={!canFormat} onFormat={onFormat} />
             <div className="preview-table-toolbar__emoji">
                 <button
+                    ref={emojiButtonRef}
                     type="button"
                     title="Emoji"
                     aria-label="Emoji"
@@ -114,10 +188,19 @@ export function TableToolbar({
                     disabled={!canFormat}
                     onClick={() => setEmojiOpen((open) => !open)}
                 >
-                    😊
+                    <Smile aria-hidden="true" />
                 </button>
-                {emojiOpen && canFormat && (
-                    <div className="preview-table-toolbar__emoji-menu">
+                {emojiOpen && canFormat && createPortal(
+                    <div
+                        ref={emojiMenuRef}
+                        className="preview-table-toolbar preview-table-toolbar__emoji-menu"
+                        style={emojiMenuPosition}
+                        role="menu"
+                        aria-label="选择 Emoji"
+                        onPointerDown={preserveEditorSelection}
+                        onPointerEnter={onPointerEnter}
+                        onPointerLeave={onPointerLeave}
+                    >
                         {emojiOptions.map((emoji) => (
                             <button
                                 key={emoji}
@@ -131,7 +214,8 @@ export function TableToolbar({
                                 {emoji}
                             </button>
                         ))}
-                    </div>
+                    </div>,
+                    document.body
                 )}
             </div>
             <span className="preview-table-toolbar__separator" />
@@ -139,9 +223,9 @@ export function TableToolbar({
             <FormatButton command="link" disabled={!canFormat} onFormat={onFormat} />
             <FormatButton command="inline-formula" disabled={!canFormat} onFormat={onFormat} />
             <span className="preview-table-toolbar__separator" />
-            <button type="button" title="撤销（Ctrl+Z）" aria-label="撤销" onClick={onUndo}>↶</button>
-            <button type="button" title="重做（Ctrl+Y）" aria-label="重做" onClick={onRedo}>↷</button>
-            <button type="button" title="保存（Ctrl+S）" aria-label="保存" onClick={onSave}>💾</button>
+            <button type="button" title="撤销（Ctrl+Z）" aria-label="撤销" onClick={onUndo}><Undo2 aria-hidden="true" /></button>
+            <button type="button" title="重做（Ctrl+Y）" aria-label="重做" onClick={onRedo}><Redo2 aria-hidden="true" /></button>
+            <button type="button" title="保存（Ctrl+S）" aria-label="保存" onClick={onSave}><Save aria-hidden="true" /></button>
         </div>,
         previewScroller
     );

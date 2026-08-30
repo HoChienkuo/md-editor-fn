@@ -41,6 +41,14 @@ export type PreviewTableCellEditorState = {
     selectionStart: number;
     selectionEnd: number;
     selectionRevision: number;
+    undoStack: PreviewTableCellSnapshot[];
+    redoStack: PreviewTableCellSnapshot[];
+};
+
+type PreviewTableCellSnapshot = {
+    value: string;
+    selectionStart: number;
+    selectionEnd: number;
 };
 
 export type PreviewTableToolbarState = {
@@ -221,14 +229,68 @@ export function usePreviewTable({
         );
     }, [replaceTable]);
 
-    const updateCellValue = useCallback((value: string) => {
+    const updateCellValue = useCallback((
+        value: string,
+        selectionStart?: number,
+        selectionEnd?: number
+    ) => {
         const active = activeCellRef.current;
 
         if (!active) {
             return;
         }
 
-        const nextActive = {...active, value};
+        const nextActive = {
+            ...active,
+            value,
+            selectionStart: selectionStart ?? active.selectionStart,
+            selectionEnd: selectionEnd ?? active.selectionEnd,
+            undoStack: [
+                ...active.undoStack,
+                {
+                    value: active.value,
+                    selectionStart: active.selectionStart,
+                    selectionEnd: active.selectionEnd
+                }
+            ],
+            redoStack: []
+        };
+        activeCellRef.current = nextActive;
+        setCellEditor(nextActive);
+    }, []);
+
+    const runCellHistory = useCallback((direction: 'undo' | 'redo') => {
+        const active = activeCellRef.current;
+
+        if (!active) {
+            return;
+        }
+
+        const sourceStack = direction === 'undo'
+            ? active.undoStack
+            : active.redoStack;
+        const snapshot = sourceStack[sourceStack.length - 1];
+
+        if (!snapshot) {
+            return;
+        }
+
+        const currentSnapshot = {
+            value: active.value,
+            selectionStart: active.selectionStart,
+            selectionEnd: active.selectionEnd
+        };
+        const nextActive = {
+            ...active,
+            ...snapshot,
+            selectionRevision: active.selectionRevision + 1,
+            undoStack: direction === 'undo'
+                ? sourceStack.slice(0, -1)
+                : [...active.undoStack, currentSnapshot],
+            redoStack: direction === 'redo'
+                ? sourceStack.slice(0, -1)
+                : [...active.redoStack, currentSnapshot]
+        };
         activeCellRef.current = nextActive;
         setCellEditor(nextActive);
     }, []);
@@ -268,7 +330,16 @@ export function usePreviewTable({
             value: result.value,
             selectionStart: result.selectionStart,
             selectionEnd: result.selectionEnd,
-            selectionRevision: active.selectionRevision + 1
+            selectionRevision: active.selectionRevision + 1,
+            undoStack: [
+                ...active.undoStack,
+                {
+                    value: active.value,
+                    selectionStart: active.selectionStart,
+                    selectionEnd: active.selectionEnd
+                }
+            ],
+            redoStack: []
         };
         activeCellRef.current = nextActive;
         setCellEditor(nextActive);
@@ -298,7 +369,16 @@ export function usePreviewTable({
                 active.value.slice(end),
             selectionStart: nextPosition,
             selectionEnd: nextPosition,
-            selectionRevision: active.selectionRevision + 1
+            selectionRevision: active.selectionRevision + 1,
+            undoStack: [
+                ...active.undoStack,
+                {
+                    value: active.value,
+                    selectionStart: active.selectionStart,
+                    selectionEnd: active.selectionEnd
+                }
+            ],
+            redoStack: []
         };
         activeCellRef.current = nextActive;
         setCellEditor(nextActive);
@@ -423,6 +503,8 @@ export function usePreviewTable({
             selectionStart: originalValue.length,
             selectionEnd: originalValue.length,
             selectionRevision: 0,
+            undoStack: [],
+            redoStack: [],
             ...getCellPosition(cell)
         };
 
@@ -923,6 +1005,8 @@ export function usePreviewTable({
         updateCellSelection,
         applyCellFormat,
         insertCellText,
+        undoCellEdit: () => runCellHistory('undo'),
+        redoCellEdit: () => runCellHistory('redo'),
         undoDocument: () => runDocumentHistory('undo'),
         redoDocument: () => runDocumentHistory('redo'),
         finishCellEdit,

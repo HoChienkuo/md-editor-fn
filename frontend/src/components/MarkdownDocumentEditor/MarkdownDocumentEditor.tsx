@@ -62,6 +62,8 @@ import {
 import {
     usePreviewTable
 } from './table/use-preview-table';
+import {emojiOptions} from './emoji-options';
+import {Smile} from 'lucide-react';
 import {
     PreviewTableLayer
 } from './table/PreviewTableLayer';
@@ -282,6 +284,8 @@ export function MarkdownDocumentEditor({
                         <Emoji
                             key="emoji"
                             title="Emoji"
+                            emojis={[...emojiOptions]}
+                            trigger={<Smile className="md-editor-icon" />}
                         />,
                         <ExportPDF
                             key="export-pdf"
@@ -328,6 +332,8 @@ export function MarkdownDocumentEditor({
                 onFormat={previewTable.applyCellFormat}
                 onInsertText={previewTable.insertCellText}
                 onMove={previewTable.moveActiveCell}
+                onCellUndo={previewTable.undoCellEdit}
+                onCellRedo={previewTable.redoCellEdit}
                 onUndo={previewTable.undoDocument}
                 onRedo={previewTable.redoDocument}
                 onSave={handleTableSave}

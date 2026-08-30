@@ -10,7 +10,7 @@ import type {PreviewTableOperation} from './types';
 
 type TableCellEditorProps = {
     editor: PreviewTableCellEditorState;
-    onChange: (value: string) => void;
+    onChange: (value: string, selectionStart?: number, selectionEnd?: number) => void;
     onCommit: () => void;
     onCancel: () => void;
     onTab: (backwards: boolean) => void;
@@ -18,6 +18,8 @@ type TableCellEditorProps = {
     onSelectionChange: (start: number, end: number) => void;
     onFormat: (command: MarkdownFormatCommand) => void;
     onMove: (operation: PreviewTableOperation) => void;
+    onUndo: () => void;
+    onRedo: () => void;
 };
 
 function escapeLinkLabel(value: string): string {
@@ -83,7 +85,9 @@ export function TableCellEditor({
     onContextMenu,
     onSelectionChange,
     onFormat,
-    onMove
+    onMove,
+    onUndo,
+    onRedo
 }: TableCellEditorProps) {
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -145,6 +149,15 @@ export function TableCellEditor({
         }
 
         const command = getFormatCommand(event);
+        const historyDirection = (event.ctrlKey || event.metaKey) &&
+            !event.altKey
+            ? event.key.toLowerCase() === 'y' ||
+                (event.key.toLowerCase() === 'z' && event.shiftKey)
+                ? 'redo'
+                : event.key.toLowerCase() === 'z'
+                    ? 'undo'
+                    : null
+            : null;
         const moveOperation: PreviewTableOperation | null =
             event.altKey && event.key === 'ArrowUp'
                 ? 'move-row-up'
@@ -156,7 +169,11 @@ export function TableCellEditor({
                             ? 'move-column-right'
                             : null;
 
-        if (moveOperation) {
+        if (historyDirection) {
+            event.preventDefault();
+            event.stopPropagation();
+            (historyDirection === 'undo' ? onUndo : onRedo)();
+        } else if (moveOperation) {
             event.preventDefault();
             event.stopPropagation();
             onMove(moveOperation);
@@ -211,7 +228,11 @@ export function TableCellEditor({
             className="preview-table-cell-editor"
             value={editor.value}
             aria-label={`编辑表格第 ${editor.row + 1} 行第 ${editor.column + 1} 列`}
-            onChange={(event) => onChange(event.target.value)}
+            onChange={(event) => onChange(
+                event.target.value,
+                event.target.selectionStart,
+                event.target.selectionEnd
+            )}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onSelect={(event) => {
